@@ -1,0 +1,281 @@
+import * as React from 'react';
+
+import type { ColorPaletteProp, SxProps } from '@mui/joy/styles/types';
+import { Box, Chip } from '@mui/joy';
+import AllInclusiveIcon from '@mui/icons-material/AllInclusive';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import TextFieldsIcon from '@mui/icons-material/TextFields';
+
+import { AutoBlocksRenderer } from '~/modules/blocks/AutoBlocksRenderer';
+import { useScaledTypographySx } from '~/modules/blocks/blocks.styles';
+
+import { ConfirmationModal } from '~/common/components/modals/ConfirmationModal';
+import { ExpanderControlledBox } from '~/common/components/ExpanderControlledBox';
+import { adjustContentScaling, ContentScaling, themeScalingMap } from '~/common/app.theme';
+import { animationSpinHalfPause } from '~/common/util/animUtils';
+import { createTextContentFragment, DMessageContentFragment, DMessageFragmentId } from '~/common/stores/chat/chat.fragments';
+import { useOverlayComponents } from '~/common/layout/overlays/useOverlayComponents';
+
+
+// configuration
+const ENABLE_MARKDOWN_DETECTION = true;
+// const REASONING_COLOR = '#ca74b8'; // '#f22a85' (folder-aligned), '#ca74b8' (emoji-aligned)
+const REASONING_COLOR: ColorPaletteProp = 'success';
+const ANTHROPIC_REDACTED_EXPLAINER = //  https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-streaming-with-redacted-thinking
+  'Some of Claude\'s internal reasoning has been automatically encrypted for safety reasons. This doesn\'t affect the quality of responses.';
+
+
+const _styles = {
+
+  block: {
+    mx: 1.5,
+  },
+
+  chip: {
+    pl: 1.5,
+    pr: 1.75,
+    my: '1px', // to not crop the outline on mobile, or on beam
+    minHeight: '1.5rem', // similar parts, modelOps and paired tools, are 1.75rem
+    '& .MuiChip-startDecorator': {
+      marginRight: '0.5em',
+    },
+  },
+
+  chipActive: {
+    outline: '1px solid',
+    outlineColor: `${REASONING_COLOR}.solidBg`, // .outlinedBorder
+    boxShadow: `1px 2px 4px -3px var(--joy-palette-${REASONING_COLOR}-solidBg)`,
+    // '& > button': {
+    //   boxShadow: `inset 1px 2px 4px -3px var(--joy-palette-${REASONING_COLOR}-solidBg)`,
+    // },
+  },
+
+  chipIcon: undefined, // { fontSize: '1rem', },
+  chipIconPending: {
+    // fontSize: '1rem',
+    animation: `${animationSpinHalfPause} 2s ease-in-out infinite`,
+  },
+
+  chipExpanded: {
+    mt: '1px', // need to copy the `chip` mt
+    // borderRadius: 'sm',
+    // transition: 'border-radius 0.2s ease-in-out',
+  },
+
+  text: {
+    borderRadius: 'sm', // was: 12px
+    border: '1px solid',
+    borderColor: `${REASONING_COLOR}.outlinedColor`,
+    backgroundColor: `rgb(var(--joy-palette-${REASONING_COLOR}-lightChannel) / 15%)`, // similar to success.50
+    // boxShadow: 'inset 1px 1px 3px -3px var(--joy-palette-neutral-solidBg)',
+    mt: 1,
+    py: 1,
+    // px: 0.5, // the blocks carry their own inline margin (text 1.5, code 0), as in messages
+
+    // layout
+    display: 'flex',
+    flexDirection: 'column',
+  },
+
+  buttonInline: {
+    outline: 'none',
+    // borderRadius: 'sm',
+    // fontSize: 'xs',
+  },
+} as const;
+
+
+/** Detect if content is potentially markdown based on common markdown patterns */
+function _maybeMarkdownReasoning(text: string): boolean {
+  const trimmed = text.trimStart();
+  return trimmed.startsWith('**')
+    || trimmed.startsWith('# ')
+    // || trimmed.startsWith('* ')
+    // || trimmed.startsWith('- ')
+    || /^#{2,6}\s/.test(trimmed);
+}
+
+
+export const BlockPartModelAuxMemo = React.memo(BlockPartModelAux);
+
+function BlockPartModelAux(props: {
+  fragmentId: DMessageFragmentId,
+  auxType: 'reasoning' | string,
+  auxText: string,
+  auxHasSignature: boolean,
+  auxRedactedDataCount: number,
+  hideActions: boolean,
+  contentScaling: ContentScaling,
+  fitScreen: boolean,
+  isMobile: boolean,
+  inFlux: boolean,
+  onFragmentDelete?: (fragmentId: DMessageFragmentId) => void,
+  onFragmentReplace?: (fragmentId: DMessageFragmentId, newFragment: DMessageContentFragment) => void,
+}) {
+
+  // state
+  const [neverExpanded, setNeverExpanded] = React.useState(true);
+  const [expanded, setExpanded] = React.useState(false);
+
+  // external state
+  const { showPromisedOverlay } = useOverlayComponents();
+
+  // derived
+  const { inFlux } = props;
+  const contentScaling = adjustContentScaling(props.contentScaling, -1);
+  const typeText = props.auxType === 'reasoning' ? 'Reasoning' : 'Auxiliary';
+
+  // collapsed content stays mounted (the expander only animates its height): freeze its text so it does not re-render while hidden
+  const shownTextRef = React.useRef(props.auxText);
+  if (expanded) shownTextRef.current = props.auxText;
+  const shownText = shownTextRef.current;
+
+  // memo
+  const maybeMarkdown = React.useMemo(() => !ENABLE_MARKDOWN_DETECTION || neverExpanded ? false : _maybeMarkdownReasoning(shownText), [neverExpanded, shownText]);
+
+  // memo style
+  const chipSx: SxProps = React.useMemo(() => ({
+    ..._styles.chip,
+    ...(inFlux && _styles.chipActive),
+    ...(expanded && _styles.chipExpanded),
+    fontSize: themeScalingMap[contentScaling]?.blockFontSize ?? undefined,
+  }), [contentScaling, expanded, inFlux]);
+  const scaledTypographySx = useScaledTypographySx(contentScaling, false, false);
+  const textSx = React.useMemo(() => ({
+    ..._styles.text,
+    ...scaledTypographySx,
+  }), [scaledTypographySx]);
+
+  // same renderer as the message text: blocks, in-flux last block while streaming
+  const { fitScreen, isMobile } = props;
+  const renderedBlocks = React.useMemo(() => neverExpanded ? null : (
+    <AutoBlocksRenderer
+      text={shownText}
+      fromRole='assistant'
+      contentScaling={contentScaling}
+      fitScreen={fitScreen}
+      isMobile={isMobile}
+      textRenderVariant={maybeMarkdown ? 'markdown' : 'text'}
+      inFlux={inFlux}
+    />
+  ), [contentScaling, fitScreen, inFlux, isMobile, maybeMarkdown, neverExpanded, shownText]);
+
+
+  // handlers
+
+  const { onFragmentDelete, onFragmentReplace } = props;
+  const showDelete = !!onFragmentDelete;
+  const showInline = !!onFragmentReplace;
+
+  const handleToggleExpanded = React.useCallback(() => {
+    setNeverExpanded(false);
+    setExpanded(on => !on);
+  }, []);
+
+  const handleDelete = React.useCallback(() => {
+    if (!onFragmentDelete) return;
+    showPromisedOverlay('chat-message-delete-aux', {}, ({ onResolve, onUserReject }) =>
+      <ConfirmationModal
+        open onClose={onUserReject} onPositive={() => onResolve(true)}
+        confirmationText={<>
+          Delete this {typeText.toLowerCase()} completely?
+          <br />
+          This action cannot be undone.
+        </>}
+        positiveActionText='Delete'
+      />,
+    ).then(() => {
+      onFragmentDelete(props.fragmentId);
+    }).catch(() => null /* ignore closure */);
+  }, [onFragmentDelete, props.fragmentId, showPromisedOverlay, typeText]);
+
+  const handleInline = React.useCallback(() => {
+    if (!onFragmentReplace) return;
+    showPromisedOverlay('chat-message-inline-aux', {}, ({ onResolve, onUserReject }) =>
+      <ConfirmationModal
+        open onClose={onUserReject} onPositive={() => onResolve(true)}
+        confirmationText={<>
+          Convert this {typeText.toLowerCase()} into regular message text?
+          <br />
+          It will become part of the message and can&apos;t be collapsed again.
+        </>}
+        positiveActionText='Convert'
+      />,
+    ).then(() => {
+      onFragmentReplace(props.fragmentId, createTextContentFragment(props.auxText));
+    }).catch(() => null /* ignore closure */);
+  }, [onFragmentReplace, props.auxText, props.fragmentId, showPromisedOverlay, typeText]);
+
+
+  // create up to 3 dots '.' based on the length of the auxText (1 dot per 100 characters)
+  // const dots = '.'.repeat(Math.floor(props.auxText.length / 100) % 5);
+
+  return <Box sx={_styles.block}>
+
+    {/* Chip to expand/collapse */}
+    <Box data-agi-no-copy /* do not copy these buttons */ sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'space-between' }}>
+      <Chip
+        size='sm'
+        color={inFlux || expanded ? REASONING_COLOR : 'neutral'}
+        variant={expanded ? 'solid' : 'soft'}
+        onClick={handleToggleExpanded}
+        sx={chipSx}
+        startDecorator={
+          <AllInclusiveIcon
+            sx={!expanded && inFlux ? _styles.chipIconPending : _styles.chipIcon}
+            /* sx={{ color: expanded ? undefined : REASONING_COLOR }} */
+          />
+        }
+        // startDecorator='🧠'
+      >
+        {/*Show {typeText}*/}
+        {inFlux && !expanded && typeText === 'Reasoning' ? `${typeText}...` : `Show ${typeText}`}
+      </Chip>
+
+      {expanded && !props.hideActions && (showInline || showDelete) && !!props.auxText && (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+
+          {/* Make inline */}
+          {showInline && <Chip
+            color={REASONING_COLOR}
+            variant='soft'
+            size='sm'
+            disabled={!onFragmentReplace}
+            onClick={!onFragmentReplace ? undefined : handleInline}
+            endDecorator={<TextFieldsIcon />}
+            sx={_styles.chip}
+          >
+            Make Regular Text
+          </Chip>}
+
+          {/* Delete */}
+          {showDelete && <Chip
+            color={REASONING_COLOR}
+            variant='soft'
+            size='sm'
+            disabled={!onFragmentDelete}
+            onClick={!onFragmentDelete ? undefined : handleDelete}
+            endDecorator={<DeleteOutlineIcon />}
+            sx={_styles.chip}
+          >
+            Delete
+          </Chip>}
+
+        </Box>
+      )}
+    </Box>
+
+    {/* Controlled Box */}
+    <ExpanderControlledBox noContain={true /* Important, allow fixed positioning on the code blocks' OverlayButtons */} expanded={expanded}>
+
+      {renderedBlocks && (
+        <Box sx={textSx}>
+          {renderedBlocks}
+          {!!props.auxRedactedDataCount && <Box component='span' sx={{ color: 'text.disabled', mx: 1.5 }}>{ANTHROPIC_REDACTED_EXPLAINER}{'.'.repeat(props.auxRedactedDataCount % 5)}</Box>}
+        </Box>
+      )}
+
+    </ExpanderControlledBox>
+
+  </Box>;
+}

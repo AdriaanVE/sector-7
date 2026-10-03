@@ -1,0 +1,1346 @@
+import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { shallow } from 'zustand/vanilla/shallow';
+import TimeAgo from 'react-timeago';
+
+import type { SxProps } from '@mui/joy/styles/types';
+import { Box, Button, ButtonGroup, CircularProgress, Divider, IconButton, Tooltip, Typography } from '@mui/joy';
+import { ClickAwayListener, Popper } from '@mui/base';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ContentCutIcon from '@mui/icons-material/ContentCut';
+import FormatBoldIcon from '@mui/icons-material/FormatBold';
+import FormatPaintOutlinedIcon from '@mui/icons-material/FormatPaintOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ReplyAllRoundedIcon from '@mui/icons-material/ReplyAllRounded';
+import ReplyRoundedIcon from '@mui/icons-material/ReplyRounded';
+import StrikethroughSIcon from '@mui/icons-material/StrikethroughS';
+
+import type { AixReattachMode } from '~/modules/aix/client/aix.client';
+import type { AutoBlocksHtmlRenderVariant } from '~/modules/blocks/AutoBlocksRenderer';
+import { ModelVendorAnthropic } from '~/modules/llms/vendors/anthropic/anthropic.vendor';
+import { vertexLinksCountInFragments, vertexLinksResolveFragments } from '~/modules/google/vertexai.client';
+
+import { DMessage, DMessageGenerator, DMessageId, DMessageUserFlag, DMetaReferenceItem, MESSAGE_FLAG_AIX_SKIP, MESSAGE_FLAG_NOTIFY_COMPLETE, MESSAGE_FLAG_STARRED, MESSAGE_FLAG_VND_ANT_CACHE_AUTO, MESSAGE_FLAG_VND_ANT_CACHE_USER, messageFragmentsInFluxId, messageFragmentsReduceText, messageHasUserFlag, messageWasOutOfTokens } from '~/common/stores/chat/chat.message';
+import { MarkHighlightIcon } from '~/common/components/icons/MarkHighlightIcon';
+import { PhTreeStructure } from '~/common/components/icons/phosphor/PhTreeStructure';
+import { PhVoice } from '~/common/components/icons/phosphor/PhVoice';
+import { Release } from '~/common/app.release';
+import { TooltipOutlined } from '~/common/components/TooltipOutlined';
+import { adjustContentScaling, themeScalingMap, themeZIndexChatBubble } from '~/common/app.theme';
+import { avatarIconSx, makeMessageAvatarIcon, messageBackground } from '~/common/util/dMessageUtils';
+import { clipboardCopyDOMSelectionOrFallback, copyToClipboard } from '~/common/util/clipboardUtils';
+import { createTextContentFragment, DMessageFragment, DMessageFragmentId, updateFragmentWithEditedText } from '~/common/stores/chat/chat.fragments';
+import { useFragmentBuckets } from '~/common/stores/chat/hooks/useFragmentBuckets';
+import { useUIPreferencesStore } from '~/common/stores/store-ui';
+
+import { BlockOpContinue } from './BlockOpContinue';
+import { BlockOpOptions, optionsExtractFromFragments_dangerModifyFragment } from './BlockOpOptions';
+import { BlockOpResolveLinks } from './BlockOpResolveLinks';
+import { BlockOpUpstreamResume } from './BlockOpUpstreamResume';
+import { ChatMessageEditAttachments, type EditModeAttachmentsHandle } from './ChatMessageEditAttachments';
+import { ChatMessageInfoPopup } from './ChatMessageInfoPopup';
+import { ChatMessageMenu } from './ChatMessageMenu';
+import { ContentFragments } from './fragments-content/ContentFragments';
+import { DocumentAttachmentFragments } from './fragments-attachment-doc/DocumentAttachmentFragments';
+import { ImageAttachmentFragments } from './fragments-attachment-image/ImageAttachmentFragments';
+import { InReferenceToList } from './in-reference-to/InReferenceToList';
+import { VoidFragments } from './fragments-void/VoidFragments';
+import { messageAsideColumnSx, messageAvatarLabelAnimatedSx, messageAvatarLabelSx, messageEditBeamControlsTopSx, messageMobileHeaderSx, messageZenAsideColumnSx } from './ChatMessage.styles';
+import { useSelHighlighterMemo } from './useSelHighlighterMemo';
+
+
+// Enable the menu on text selection
+const ENABLE_BUBBLE = true;
+export const BUBBLE_MIN_TEXT_LENGTH = 3;
+
+// Enable the hover button to copy the whole message. The Copy button is also available in Blocks, or in the Avatar Menu.
+// const ENABLE_COPY_MESSAGE_OVERLAY: boolean = false;
+
+
+export const messageSkippedSx = {
+  // show a nice ghostly border (dashed?)
+  border: '1px dashed',
+  borderColor: 'neutral.solidBg',
+  // make it look good
+  filter: 'grayscale(1)',
+} as const;
+
+// Message component styles
+const _styles = {
+  // Message body layouts
+  msgBody: {
+    display: 'flex',
+    alignItems: 'flex-start', // avatars at the top, and honor 'static' position
+    gap: { xs: 0, md: 1 },
+  },
+  msgBodyReverse: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: { xs: 0, md: 1 },
+    flexDirection: 'row-reverse',
+  },
+  msgBodyMobile: {
+    display: 'flex',
+  },
+  // Mobile toolbar (header)
+  mtIcon: {
+    '--AGI-Avatar-size': '28px',
+    width: 28,
+    height: 28,
+    flexShrink: 0,
+  },
+  mtLabel: {
+    flex: 1,
+  },
+  mtLabelGenerating: {
+    flex: 1,
+    ...messageAvatarLabelAnimatedSx,
+  },
+  mtSpacer: {
+    flex: 1,
+  },
+  mtTime: {
+    color: 'text.tertiary',
+    mr: 0.5,
+    flexShrink: 0,
+    opacity: 0.5,
+  },
+  mtButton: {
+    flexShrink: 0,
+    '--IconButton-size': '40px',
+    '&:focus-visible': { outline: '2px solid var(--joy-palette-focusVisible)', outlineOffset: -2 },
+  },
+  // Avatar/menu button (pure CSS hover system)
+  iconContainer: {
+    display: 'flex',
+    position: 'relative',
+    // Hide avatar on hover/focus-within, show button
+    '&:hover .avatar-icon, &:focus-within .avatar-icon': {
+      opacity: 0,
+    },
+    '&:hover .menu-button, &:focus-within .menu-button': {
+      opacity: 1,
+    },
+  },
+  iconAvatarVisible: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    opacity: 1,
+  },
+  iconAvatarHidden: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    opacity: 0,
+  },
+  iconButtonVisible: {
+    ...avatarIconSx,
+    opacity: 1,
+  },
+  iconButtonHidden: {
+    ...avatarIconSx,
+    opacity: 0,
+  },
+} as const satisfies Record<string, SxProps>;
+
+export const messageBodyReverseSx = _styles.msgBodyReverse;
+
+const editButtonWrapSx: SxProps = {
+  overflowWrap: 'anywhere',
+  mb: -0.5, // this is so that the 'edit/cancel' labels won't push down the edit box when single lined
+};
+
+const fragmentsListSx: SxProps = {
+  // style
+  flexGrow: 1,  // capture all the space, for edit modes
+  minWidth: 0,  // VERY important, otherwise very wide messages will overflow the container, causing scroll on the whole page
+  my: 'auto',   // v-center content if there's any gap (e.g. single line of text)
+
+  // layout
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 1.5,     // we give a bit more space between the 'classes' of fragments (in-reply-to, images, content, attachments, etc.)
+};
+
+
+export interface ChatMessageFunctionsHandle {
+  beginEditTextContent: () => void;
+}
+
+export type ChatMessageTextPartEditState = { [fragmentId: DMessageFragmentId]: string };
+
+const assistantHeaderSx: SxProps = {
+  ...messageAsideColumnSx,
+  position: 'static', flexDirection: 'row', minWidth: 0, maxWidth: '100%', width: '100%',
+  justifyContent: 'flex-end', textAlign: 'left', gap: 1, mb: 0,
+  '& .MuiTypography-root': { whiteSpace: 'normal', overflowWrap: 'anywhere' },
+};
+
+// CSS owns hover/focus; this named boundary makes the memo visible in React Profiler.
+const CMDesktopAvatar = React.memo(function CMDesktopAvatar(props: {
+  icon: React.ReactNode,
+  label: React.ReactNode,
+  tooltip: React.ReactNode,
+  horizontal?: boolean,
+  zenMode: boolean,
+  pending: boolean,
+  menuOpen: boolean,
+  menuColor: React.ComponentProps<typeof IconButton>['color'],
+  onClick: (event: React.MouseEvent<HTMLElement>) => void,
+  onContextMenu: (event: React.MouseEvent<HTMLElement>) => void,
+}) {
+  return (
+    <Box sx={props.horizontal ? assistantHeaderSx : props.zenMode ? messageZenAsideColumnSx : messageAsideColumnSx}>
+
+      {/* Persona Avatar or Menu Button */}
+      <Box sx={props.horizontal ? { ..._styles.iconContainer, order: 1, flexShrink: 0 } : _styles.iconContainer}>
+        {/* Avatar Icon - shown by default */}
+        {props.icon != null && (
+          <Box
+            className='avatar-icon'
+            onClick={props.onClick}
+            onContextMenu={props.onContextMenu}
+            sx={props.menuOpen ? _styles.iconAvatarHidden : _styles.iconAvatarVisible}
+          >
+            {props.icon}
+          </Box>
+        )}
+
+        {/* Menu Button - hidden by default, shown on hover/focus */}
+        <IconButton
+          className='menu-button'
+          size='sm'
+          variant={props.menuOpen ? 'soft' : 'plain'}
+          aria-label='Message actions'
+          aria-expanded={props.menuOpen}
+          color={props.menuColor}
+          onClick={props.onClick}
+          onContextMenu={props.onContextMenu}
+          sx={(props.menuOpen || props.icon == null) ? _styles.iconButtonVisible : _styles.iconButtonHidden}
+        >
+          <MoreVertIcon />
+        </IconButton>
+      </Box>
+
+      {/* Assistant (llm/function) name */}
+      {props.label != null && (
+        <TooltipOutlined asLargePane enableInteractive title={props.tooltip} placement='bottom-start'>
+          <Typography level='body-xs' sx={(props.pending && !Release.Features.LIGHTER_ANIMATIONS) ? messageAvatarLabelAnimatedSx : messageAvatarLabelSx}>
+            {props.label}
+          </Typography>
+        </TooltipOutlined>
+      )}
+
+    </Box>
+  );
+});
+
+
+const CMMobileHeader = React.memo(function CMMobileHeader(props: {
+  icon: React.ReactNode,
+  label: React.ReactNode,
+  timestamp: number | null,
+  pending: boolean,
+  showSpacer: boolean,
+  backgroundColor: string,
+  menuVariant: React.ComponentProps<typeof IconButton>['variant'],
+  menuColor: React.ComponentProps<typeof IconButton>['color'],
+  onHeaderClick: (event: React.MouseEvent<HTMLElement>) => void,
+  onClick: (event: React.MouseEvent<HTMLElement>) => void,
+  onContextMenu: (event: React.MouseEvent<HTMLElement>) => void,
+  onEditApply: (() => void) | undefined,
+  onEditCancel: () => void,
+}) {
+  return (
+    <Box bgcolor={props.backgroundColor} onClick={props.onHeaderClick} sx={messageMobileHeaderSx}>
+
+      {/* Avatar (assistant/system) */}
+      {props.icon != null && (
+        <Box sx={_styles.mtIcon}>
+          {props.icon}
+        </Box>
+      )}
+
+      {/* Model name / label */}
+      {props.label != null && (
+        <Typography level='body-xs' className='agi-ellipsize' sx={(props.pending && !Release.Features.LIGHTER_ANIMATIONS) ? _styles.mtLabelGenerating : _styles.mtLabel}>
+          {props.label}
+        </Typography>
+      )}
+
+      {/* Spacer */}
+      {props.showSpacer && <Box sx={_styles.mtSpacer} />}
+
+      {/* TimeAgo for user messages (right-aligned) */}
+      {props.timestamp && (
+        <Typography level='body-xs' sx={_styles.mtTime}>
+          <TimeAgo date={props.timestamp} />
+        </Typography>
+      )}
+
+      {/* Edit buttons (when editing) */}
+      {props.onEditApply && <>
+        <Button size='sm' color='neutral' variant='plain' onClick={props.onEditCancel} startDecorator={<CloseRoundedIcon />} sx={_styles.mtButton}>
+          Cancel
+        </Button>
+        <Button size='sm' color='warning' onClick={props.onEditApply} startDecorator={<CheckRoundedIcon />} sx={_styles.mtButton} style={{ minWidth: 100 }}>
+          Done
+        </Button>
+      </>}
+
+      {/* Menu button (always visible on mobile) */}
+      {!props.onEditApply && (
+        <IconButton
+          aria-label='Message actions'
+          variant={props.menuVariant}
+          color={props.menuColor}
+          onClick={props.onClick}
+          onContextMenu={props.onContextMenu}
+          sx={_styles.mtButton}
+        >
+          <MoreVertIcon sx={{ fontSize: 'xl' }} />
+        </IconButton>
+      )}
+    </Box>
+  );
+});
+
+
+export const ChatMessageMemo = React.memo(ChatMessage);
+
+/**
+ * For the chat list: memoized while complete, re-rendered every chunk while pending, and one component
+ * type at every position, so completion never remounts the message. Not for hosts whose messages stay pending.
+ */
+export const ChatMessageStreamingMemo = React.memo(ChatMessage, (prev, next) =>
+  // prev too: a completion that clears the flag on the same object leaves the props shallow-equal, and must still render once
+  !prev.message.pendingIncomplete && !next.message.pendingIncomplete && shallow(prev, next),
+);
+
+/**
+ * The Message component is a customizable chat message UI component that supports
+ * different roles (user, assistant, and system), text editing, syntax highlighting,
+ * and code execution using Sandpack for TypeScript, JavaScript, and HTML code blocks.
+ * The component also provides options for copying code to clipboard and expanding
+ * or collapsing long user messages.
+ *
+ */
+export function ChatMessage(props: {
+  actionsRef?: React.Ref<ChatMessageFunctionsHandle>,
+  message: DMessage,
+  // diffPreviousText?: string, // DISABLE: unused, was the text from the former messages to delta between them
+  fitScreen: boolean,
+  hasInReferenceTo?: boolean;
+  isMobile: boolean,
+  isBottom?: boolean,
+  isImagining?: boolean,
+  isSpeaking?: boolean,
+  hideAvatar?: boolean,
+  blocksStretch?: boolean, // overrides 'messageFullWidth'
+  showAntPromptCaching?: boolean,
+  showBlocksDate?: boolean,
+  htmlRenderVariant?: AutoBlocksHtmlRenderVariant,
+  adjustContentScaling?: number,
+  topDecorator?: React.ReactNode,
+  onAddInReferenceTo?: (item: DMetaReferenceItem) => void,
+  onMessageAssistantFrom?: (messageId: string, offset: number) => Promise<void>,
+  onMessageBeam?: (messageId: string) => Promise<void>,
+  onMessageBranch?: (messageId: string) => void,
+  onMessageContinue?: (messageId: string, continueText: null | string) => void,
+  onMessageUpstreamResume?: (generator: DMessageGenerator, messageId: string, mode: AixReattachMode) => Promise<void>,
+  onMessageUpstreamDetach?: (messageId: string) => void,
+  onMessageUpstreamDelete?: (generator: DMessageGenerator, messageId: string) => Promise<void>,
+  upstreamResumeMode?: AixReattachMode, // set by parent while a resume is in flight on this message
+  onMessageDelete?: (messageId: string) => void,
+  onMessageFragmentAppend?: (messageId: DMessageId, fragment: DMessageFragment) => void
+  onMessageFragmentDelete?: (messageId: DMessageId, fragmentId: DMessageFragmentId) => void,
+  onMessageFragmentReplace?: (messageId: DMessageId, fragmentId: DMessageFragmentId, newFragment: DMessageFragment) => void,
+  onMessageToggleUserFlag?: (messageId: string, flag: DMessageUserFlag, maxPerConversation?: number) => void,
+  onMessageTruncate?: (messageId: string) => void,
+  onTextDiagram?: (messageId: string, text: string) => Promise<void>,
+  onTextImagine?: (text: string) => Promise<void>,
+  onTextSpeak?: (text: string) => Promise<void>,
+  sx?: SxProps,
+}) {
+
+  // state
+  const blocksRendererRef = React.useRef<HTMLDivElement>(null);
+  const [selText, setSelText] = React.useState<string | null>(null);
+  const [bubbleAnchor, setBubbleAnchor] = React.useState<HTMLElement | null>(null);
+  const [opsMenuAnchor, setOpsMenuAnchor] = React.useState<HTMLElement | null>(null);
+  const [textContentEditState, setTextContentEditState] = React.useState<ChatMessageTextPartEditState | null>(null);
+  const [showInfoModal, setShowInfoModal] = React.useState(false);
+  const attachmentsEditRef = React.useRef<EditModeAttachmentsHandle>(null);
+
+  // latest-message ref: lets stable callbacks read the current message without putting it in deps
+  const messageRef = React.useRef(props.message);
+  messageRef.current = props.message;
+
+  // external state
+  const { adjContentScaling, disableMarkdown, doubleClickToEdit, messageFullWidth, uiComplexityMode } = useUIPreferencesStore(useShallow(state => ({
+    adjContentScaling: adjustContentScaling(state.contentScaling, props.adjustContentScaling),
+    disableMarkdown: state.disableMarkdown,
+    doubleClickToEdit: state.doubleClickToEdit,
+    messageFullWidth: state.messageFullWidth,
+    uiComplexityMode: state.complexityMode,
+  })));
+
+
+  // derived state
+  const {
+    id: messageId,
+    role: messageRole,
+    fragments: messageFragments,
+    pendingIncomplete: messagePendingIncomplete,
+    purposeId: messagePurposeId,
+    generator: messageGenerator,
+    metadata: messageMetadata,
+    created: messageCreated,
+    updated: messageUpdated,
+  } = props.message;
+
+  const fromAssistant = messageRole === 'assistant';
+  const fromSystem = messageRole === 'system';
+  const fromUser = messageRole === 'user';
+  const messageHasBeenEdited = !!messageUpdated;
+  const msgGenOutOfTokens = messageWasOutOfTokens(messageGenerator);
+
+  const isUserMessageSkipped = messageHasUserFlag(props.message, MESSAGE_FLAG_AIX_SKIP);
+  const isUserStarred = messageHasUserFlag(props.message, MESSAGE_FLAG_STARRED);
+  const isUserNotifyComplete = messageHasUserFlag(props.message, MESSAGE_FLAG_NOTIFY_COMPLETE);
+  const isVndAndCacheAuto = !!props.showAntPromptCaching && messageHasUserFlag(props.message, MESSAGE_FLAG_VND_ANT_CACHE_AUTO);
+  const isVndAndCacheUser = !!props.showAntPromptCaching && messageHasUserFlag(props.message, MESSAGE_FLAG_VND_ANT_CACHE_USER);
+
+  const {
+    annotationFragments,    // Web Citations, References (rendered at top)
+    interleavedFragments,   // Reasoning, Placeholders, Text, Code, Tools (interleaved in temporal order)
+    imageAttachments,       // Stamp-sized Images
+    nonImageAttachments,    // Document Attachments, likely the User dropped them in
+  } = useFragmentBuckets(messageFragments);
+
+  // Activity follows the raw stream order, independent of display filtering and injected layout.
+  const inFluxFragmentId = React.useMemo(() => messageFragmentsInFluxId(messageFragments, !!messagePendingIncomplete), [messageFragments, messagePendingIncomplete]);
+
+  const fragmentFlattenedText = React.useMemo(() => messageFragmentsReduceText(messageFragments), [messageFragments]);
+  const contentFragments = React.useMemo(() => interleavedFragments.filter(f => f.ft === 'content'), [interleavedFragments]);
+  const handleHighlightSelText = useSelHighlighterMemo(messageId, selText, contentFragments, fromAssistant, props.onMessageFragmentReplace);
+
+  // [#1114] Vertex AI grounding redirect links present in this message (skip the scan while streaming - the button is gated on completion anyway)
+  const vertexLinksCount = React.useMemo(() => {
+    return fromAssistant && !messagePendingIncomplete ? vertexLinksCountInFragments(messageFragments) : 0;
+  }, [fromAssistant, messagePendingIncomplete, messageFragments]);
+
+  const textSubject = selText ? selText : fragmentFlattenedText;
+  const isSpecialT2I = textSubject.startsWith('/draw ') || textSubject.startsWith('/imagine ') || textSubject.startsWith('/img ');
+  const couldDiagram = textSubject.length >= 100 && !isSpecialT2I;
+  const couldImagine = textSubject.length >= 3 && !isSpecialT2I;
+  const couldSpeak = couldImagine;
+
+  const userCommandApprox = !fromUser ? false
+    : fragmentFlattenedText.startsWith('/draw ') ? 'draw'
+      : fragmentFlattenedText.startsWith('/react ') ? 'react'
+        : false;
+
+
+  // TODO: fix the diffing
+  // const wordsDiff = useWordsDifference(textSubject, props.diffPreviousText, showDiff);
+
+
+  const { onMessageAssistantFrom, onMessageDelete, onMessageFragmentAppend, onMessageFragmentDelete, onMessageFragmentReplace, onMessageContinue, onMessageToggleUserFlag, onMessageUpstreamResume, onMessageUpstreamDetach, onMessageUpstreamDelete } = props;
+
+  const handleFragmentNew = React.useCallback(() => {
+    onMessageFragmentAppend?.(messageId, createTextContentFragment(''));
+  }, [messageId, onMessageFragmentAppend]);
+
+  const handleFragmentDelete = React.useCallback((fragmentId: DMessageFragmentId) => {
+    onMessageFragmentDelete?.(messageId, fragmentId);
+  }, [messageId, onMessageFragmentDelete]);
+
+  const handleFragmentReplace = React.useCallback((fragmentId: DMessageFragmentId, newFragment: DMessageFragment) => {
+    onMessageFragmentReplace?.(messageId, fragmentId, newFragment);
+  }, [messageId, onMessageFragmentReplace]);
+
+  const handleResolveVertexLinks = React.useCallback(async () => {
+    const outcome = await vertexLinksResolveFragments(messageFragments);
+    switch (outcome.status) {
+      case 'resolved':
+        for (const { fragmentId, newFragment } of outcome.resolution.changedFragments)
+          onMessageFragmentReplace?.(messageId, fragmentId, newFragment);
+        return undefined; // success
+      case 'unresolved':
+        return 'Links may have expired'; // aged out (no retry hint - retrying won't help)
+      case 'failed':
+        return 'Could not resolve - retry'; // transient: network/timeout
+      case 'none':
+        return undefined; // nothing to resolve (button shouldn't be showing)
+    }
+  }, [messageFragments, messageId, onMessageFragmentReplace]);
+
+  const handleMessageContinue = React.useCallback((continueText: null | string) => {
+    onMessageContinue?.(messageId, continueText);
+  }, [messageId, onMessageContinue]);
+
+  const handleUpstreamResume = React.useCallback((mode: AixReattachMode) => {
+    if (!messageGenerator) return;
+    return onMessageUpstreamResume?.(messageGenerator, messageId, mode);
+  }, [messageGenerator, messageId, onMessageUpstreamResume]);
+
+  const handleUpstreamDetach = React.useCallback(() => {
+    onMessageUpstreamDetach?.(messageId);
+  }, [messageId, onMessageUpstreamDetach]);
+
+  const handleUpstreamDelete = React.useCallback(() => {
+    if (!messageGenerator) return;
+    return onMessageUpstreamDelete?.(messageGenerator, messageId);
+  }, [messageGenerator, messageId, onMessageUpstreamDelete]);
+
+  const handleMessageDelete = React.useCallback(() => {
+    onMessageDelete?.(messageId);
+  }, [messageId, onMessageDelete]);
+
+  const handleMessageUserFlagToggle = React.useCallback((flag: DMessageUserFlag, maxPerConversation?: number) => {
+    onMessageToggleUserFlag?.(messageId, flag, maxPerConversation);
+  }, [messageId, onMessageToggleUserFlag]);
+
+
+  // Text Editing
+
+  const isEditingText = !!textContentEditState;
+
+  const handleApplyEdit = React.useCallback((fragmentId: DMessageFragmentId, editedText: string) => {
+    // perform deletion of the fragment if the text is empty
+    if (!editedText.length)
+      return handleFragmentDelete(fragmentId);
+
+    // find the fragment to be replaced
+    const oldFragment = messageFragments.find(f => f.fId === fragmentId);
+    if (!oldFragment) return;
+    const newFragment = updateFragmentWithEditedText(oldFragment, editedText);
+    if (newFragment)
+      handleFragmentReplace(fragmentId, newFragment);
+  }, [handleFragmentDelete, handleFragmentReplace, messageFragments]);
+
+  const handleApplyAllEdits = React.useCallback(async (withControl: boolean) => {
+    // 0. take state, including new attachment drafts BEFORE clearing state
+    const fragmentsEdits = textContentEditState || {};
+    const newFragments = await attachmentsEditRef.current?.takeAllFragments() ?? [];
+
+    // 1. clear edit state (unmounts EditModeAttachments, triggers cleanup)
+    setTextContentEditState(null);
+
+    // 2A. apply text fragment edits
+    for (const [fragmentId, editedText] of Object.entries(fragmentsEdits))
+      handleApplyEdit(fragmentId, editedText);
+
+    // 2B. append new attachment fragments
+    for (const fragment of newFragments)
+      onMessageFragmentAppend?.(messageId, fragment);
+
+    // 3. if the user pressed Ctrl, we begin a regeneration from here
+    if (withControl && onMessageAssistantFrom)
+      await onMessageAssistantFrom(messageId, 0);
+  }, [handleApplyEdit, messageId, onMessageAssistantFrom, onMessageFragmentAppend, textContentEditState]);
+
+  const handleEditsApplyClicked = React.useCallback(() => handleApplyAllEdits(false), [handleApplyAllEdits]);
+
+  const handleEditsBegin = React.useCallback(() => setTextContentEditState({}), []);
+
+  const handleEditsCancel = React.useCallback(() => setTextContentEditState(null), []);
+
+  // a resume flips a complete message back to pending: leave edit mode (the remount used to)
+  React.useEffect(() => {
+    if (messagePendingIncomplete) setTextContentEditState(null);
+  }, [messagePendingIncomplete]);
+
+  const handleEditSetText = React.useCallback((fragmentId: DMessageFragmentId, editedText: string, applyNow: boolean) => {
+    if (applyNow)
+      handleApplyEdit(fragmentId, editedText);
+    else
+      setTextContentEditState((prev): ChatMessageTextPartEditState => ({ ...prev, [fragmentId]: editedText || '' }));
+  }, [handleApplyEdit]);
+
+
+  /// Bubble ///
+
+  const closeBubble = React.useCallback((anchorEl?: HTMLElement, options?: { clearSelection?: boolean }) => {
+    // NOTE - we used to have this always on, which would remove the highlighted text, but it's fired too much and in particular
+    // it was corrupting the extension of text selection (http://github.com/enricoros/big-AGI/issues/788)
+    //
+    // However the likely expected user behavior here is to keep the selection, hence by default we don't clear it
+    if (options?.clearSelection)
+      window.getSelection()?.removeAllRanges?.();
+    try {
+      const anchor = anchorEl || bubbleAnchor;
+      anchor && document.body.removeChild(anchor);
+    } catch (e) {
+      // ignore...
+    }
+    setBubbleAnchor(null);
+    setSelText(null);
+  }, [bubbleAnchor]);
+
+  // restore blocksRendererRef
+  const handleOpenBubble = React.useCallback((_event?: MouseEvent | null) => {
+    // check for selection
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount <= 0) return;
+
+    // check for enough selection
+    const selectionText = selection.toString();
+    if (selectionText.trim().length < BUBBLE_MIN_TEXT_LENGTH) return;
+
+    // check for the selection being inside the blocks renderer (core of the message)
+    const selectionRange = selection.getRangeAt(0);
+    const blocksElement = blocksRendererRef.current;
+    if (!blocksElement || !blocksElement.contains(selectionRange.commonAncestorContainer)) return;
+
+    const rangeRects = selectionRange.getClientRects();
+    if (rangeRects.length <= 0) return;
+
+    const firstRect = rangeRects[0];
+    const anchorEl = document.createElement('div');
+    anchorEl.style.position = 'fixed';
+    anchorEl.style.left = `${firstRect.left + window.scrollX}px`;
+    anchorEl.style.top = !props.isMobile ? `${firstRect.top + window.scrollY}px` : `${firstRect.top + window.scrollY - 45}px`;
+    if (props.isMobile)
+      anchorEl.style.zIndex = '99999';  // Higher z-index to compete with native UI
+
+    document.body.appendChild(anchorEl);
+    anchorEl.setAttribute('role', 'dialog');
+
+    // auto-close logic on unselect
+    const closeOnUnselect = () => {
+      const selection = window.getSelection();
+      if (!selection || selection.toString().trim() === '') {
+        closeBubble(anchorEl, { clearSelection: false });
+        document.removeEventListener('selectionchange', closeOnUnselect);
+      }
+    };
+    document.addEventListener('selectionchange', closeOnUnselect);
+
+    setBubbleAnchor(anchorEl);
+    setSelText(selectionText); /* TODO: operate on the underlying content, not the rendered text */
+  }, [closeBubble, props.isMobile]);
+
+  const handleBubbleClickAway = React.useCallback((event: MouseEvent | TouchEvent /* DOM, not React */) => {
+    if (!event.shiftKey)
+      closeBubble();
+  }, [closeBubble]);
+
+
+  /// Message Menu (3 dots) ///
+
+  const {
+    onMessageBeam, onMessageBranch, onMessageTruncate, onAddInReferenceTo,
+    onTextDiagram, onTextImagine, onTextSpeak,
+  } = props;
+
+  const handleOpsMenuToggle = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault(); // added for the Right mouse click (to prevent the menu)
+    !!event.currentTarget && setOpsMenuAnchor(event.currentTarget);
+  }, []);
+
+  const handleOpsMenuClose = React.useCallback(() => setOpsMenuAnchor(null), []);
+
+  const handleAvatarClick = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
+    // [DEBUG][PROD] shift+click to dump the DMessage
+    event.shiftKey && console.log('message', messageRef.current); // [DEV-PRINT]
+    handleOpsMenuToggle(event);
+  }, [handleOpsMenuToggle]);
+
+  // Mobile: tap the sticky header (avatar/label area) to scroll message top into view
+  const handleMobileHeaderTap = React.useCallback((event: React.MouseEvent) => {
+    // [DEBUG][PROD] shift+click to dump the DMessage (parity with desktop handleAvatarClick)
+    event.shiftKey && console.log('message', messageRef.current); // [DEV-PRINT]
+    // Don't interfere with buttons (menu, edit) - only handle taps on the header background, avatar, or label
+    if ((event.target as HTMLElement).closest('button')) return;
+    const messageEl = (event.currentTarget as HTMLElement).closest('[role="chat-message"]');
+    messageEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const handleOpsShowInfo = React.useCallback(() => {
+    setOpsMenuAnchor(null);
+    setShowInfoModal(true);
+  }, []);
+
+  const handleInfoClose = React.useCallback(() => setShowInfoModal(false), []);
+
+  const handleOpsAssistantFrom = React.useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onMessageAssistantFrom) {
+      handleOpsMenuClose();
+      await onMessageAssistantFrom(messageId, fromAssistant ? -1 : 0);
+    }
+  }, [fromAssistant, handleOpsMenuClose, messageId, onMessageAssistantFrom]);
+
+  const handleOpsBeamFrom = React.useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onMessageBeam) {
+      handleOpsMenuClose();
+      await onMessageBeam(messageId);
+    }
+  }, [handleOpsMenuClose, messageId, onMessageBeam]);
+
+  const handleOpsBranchFrom = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onMessageBranch) {
+      e.stopPropagation(); // to try to not steal the focus from the branched conversation
+      onMessageBranch(messageId);
+      handleOpsMenuClose();
+    }
+  }, [handleOpsMenuClose, messageId, onMessageBranch]);
+
+  const handleOpsMessageCopySrc = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    // copy full source text (ops menu) - bypasses DOM, always gets pre-collapsed content
+    copyToClipboard(fragmentFlattenedText, 'Message');
+    handleOpsMenuClose();
+  }, [fragmentFlattenedText, handleOpsMenuClose]);
+
+  const handleBubbleCopyDOM = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    // copy cleaned DOM selection (bubble) - rich text for pasting into Google Docs, etc.
+    clipboardCopyDOMSelectionOrFallback(blocksRendererRef.current, textSubject, 'Selection');
+    handleOpsMenuClose();
+    closeBubble();
+  }, [closeBubble, handleOpsMenuClose, textSubject]);
+
+  const handleOpsMessageEditToggle = React.useCallback((e: React.MouseEvent) => {
+    if (messagePendingIncomplete && !isEditingText) return; // don't allow editing while incomplete
+    if (isEditingText) handleEditsCancel();
+    else handleEditsBegin();
+    e.preventDefault();
+    handleOpsMenuClose();
+  }, [handleOpsMenuClose, handleEditsBegin, handleEditsCancel, isEditingText, messagePendingIncomplete]);
+
+  const handleOpsMessageTruncate = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    onMessageTruncate?.(messageId);
+    handleOpsMenuClose();
+  }, [handleOpsMenuClose, messageId, onMessageTruncate]);
+
+  const handleOpsTextDiagram = React.useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onTextDiagram) {
+      await onTextDiagram(messageId, textSubject.trim());
+      handleOpsMenuClose();
+      closeBubble();
+    }
+  }, [closeBubble, handleOpsMenuClose, messageId, onTextDiagram, textSubject]);
+
+  const handleOpsTextImagine = React.useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onTextImagine) {
+      await onTextImagine(textSubject.trim());
+      handleOpsMenuClose();
+      closeBubble();
+    }
+  }, [closeBubble, handleOpsMenuClose, onTextImagine, textSubject]);
+
+  const handleOpsTextSpeak = React.useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onTextSpeak) {
+      await onTextSpeak(textSubject.trim());
+      handleOpsMenuClose();
+      closeBubble();
+    }
+  }, [closeBubble, handleOpsMenuClose, onTextSpeak, textSubject]);
+
+
+  const handleOpsAddInReferenceTo = React.useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (onAddInReferenceTo && textSubject.trim().length >= BUBBLE_MIN_TEXT_LENGTH) {
+      onAddInReferenceTo({ mrt: 'dmsg', mText: textSubject.trim(), mRole: messageRole /*, messageId*/ });
+      handleOpsMenuClose();
+      closeBubble();
+    }
+  }, [closeBubble, handleOpsMenuClose, messageRole, onAddInReferenceTo, textSubject]);
+
+
+  // Expose actions handle for parent components
+  React.useImperativeHandle(props.actionsRef, () => ({
+    beginEditTextContent: () => {
+      if (!isEditingText && onMessageFragmentReplace && !messagePendingIncomplete)
+        handleEditsBegin();
+    },
+  }), [handleEditsBegin, isEditingText, messagePendingIncomplete, onMessageFragmentReplace]);
+
+
+  // Blocks renderer
+
+  const handleBlocksDoubleClick = React.useCallback((event: React.MouseEvent) => {
+    if ((doubleClickToEdit || event.shiftKey) && onMessageFragmentReplace)
+      handleOpsMessageEditToggle(event);
+  }, [doubleClickToEdit, handleOpsMessageEditToggle, onMessageFragmentReplace]);
+
+  const handleBlocksMouseUp = React.useCallback((event: React.MouseEvent) => {
+    // https://github.com/enricoros/big-AGI/issues/788
+    // If shift is pressed, it's a selection extension attempt. Let the browser handle it.
+    if (event.shiftKey)
+      return;
+    handleOpenBubble(event.nativeEvent);
+  }, [handleOpenBubble]);
+
+  const handleBlocksTouchEnd = React.useCallback((event: React.TouchEvent) => {
+    if (event.shiftKey) return; // just to match the flow
+
+    // on mobile, allow for text-selection events to process, then open
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length >= BUBBLE_MIN_TEXT_LENGTH)
+        handleOpenBubble(null);
+    }, 300);
+  }, [handleOpenBubble]);
+
+
+  // Options interceptor
+
+  const lookForOptions = onMessageContinue !== undefined && props.isBottom === true && !msgGenOutOfTokens && fromAssistant && !messagePendingIncomplete && !isEditingText && uiComplexityMode !== 'minimal' && false;
+
+  const { fragments: renderInterleavedFragments, options: continuationOptions, trimmedFragment } = React.useMemo(() => {
+    return optionsExtractFromFragments_dangerModifyFragment(lookForOptions, interleavedFragments);
+  }, [interleavedFragments, lookForOptions]);
+
+  const handleRenderedTextEdit = React.useCallback((fragmentId: DMessageFragmentId, editedText: string, applyNow: boolean) => {
+    // Restore hidden options before saving or checking for deletion. Full-text editing is untrimmed.
+    const sourceText = applyNow && trimmedFragment?.fragmentId === fragmentId ? editedText + trimmedFragment.suffix : editedText;
+    handleEditSetText(fragmentId, sourceText, applyNow);
+  }, [handleEditSetText, trimmedFragment]);
+
+
+  // style
+  const backgroundColor = fromUser && !userCommandApprox ? 'transparent' : messageBackground(messageRole, userCommandApprox, messageHasBeenEdited, false /*isAssistantError && !errorMessage*/, msgGenOutOfTokens);
+
+  const listItemSx: SxProps = React.useMemo(() => ({
+    // vars
+    // '--AGI-overlay-start-opacity': uiComplexityMode === 'extra' ? 0.1 : 0, // disabled - looks worse
+
+    // style
+    backgroundColor,
+    px: { xs: 1, md: themeScalingMap[adjContentScaling]?.chatMessagePadding ?? 2 },
+    py: 1.5,
+    // filter: 'url(#agi-futuristic-glow)',
+
+    '& .menu-button': { opacity: 0 },
+    '&:hover .menu-button, &:focus-within .menu-button': { opacity: 1 },
+    '& .menu-button[aria-expanded="true"]': { opacity: 1 },
+    '@media (hover: none)': { '& .menu-button': { opacity: 1 } },
+
+    // style: when starred
+    ...(isUserStarred && {
+      outline: '3px solid',
+      outlineColor: 'primary.solidBg',
+      boxShadow: 'lg',
+      borderRadius: 'lg',
+      zIndex: 1,
+    }),
+
+    // style: when has a user/automatic breakpoint
+    ...(isVndAndCacheUser && {
+      borderInlineStart: `0.125rem solid ${ModelVendorAnthropic.brandColor}`,
+      // borderTopLeftRadius: '0.375rem',
+      // borderBottomLeftRadius: '0.375rem',
+    }),
+    ...(uiComplexityMode === 'extra' && isVndAndCacheAuto && !isVndAndCacheUser && {
+      position: 'relative',
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: '0.125rem',
+        background: `repeating-linear-gradient( -45deg, transparent, transparent 2px, ${ModelVendorAnthropic.brandColor} 2px, ${ModelVendorAnthropic.brandColor} 12px ) repeat`,
+      },
+    }),
+    // style: when the user skips the message
+    ...(isUserMessageSkipped && messageSkippedSx),
+
+    // style: when the message is being edited
+    ...(isEditingText && {
+      zIndex: 1, // this is to make the whole message appear on top of Beam Scatter > RayControlsMemo
+    }),
+
+    // for: ENABLE_COPY_MESSAGE_OVERLAY
+    // '&:hover > button': { opacity: 1 },
+
+    // layout
+    display: 'block', // this is Needed, otherwise there will be a horizontal overflow
+
+    ...props.sx,
+  }), [adjContentScaling, backgroundColor, isEditingText, isUserMessageSkipped, isUserStarred, isVndAndCacheAuto, isVndAndCacheUser, props.sx, uiComplexityMode]);
+
+
+  // avatar icon & label & tooltip
+
+  const zenMode = uiComplexityMode === 'minimal';
+
+  const showAvatarIcon = false;
+  const messageGeneratorName = messageGenerator?.name;
+  const messageAvatarIcon = React.useMemo(
+    () => !showAvatarIcon ? null : makeMessageAvatarIcon(uiComplexityMode, messageRole, messageGeneratorName, messagePurposeId, !!messagePendingIncomplete, isUserMessageSkipped, isUserNotifyComplete, true),
+    [isUserMessageSkipped, isUserNotifyComplete, messageGeneratorName, messagePendingIncomplete, messagePurposeId, messageRole, showAvatarIcon, uiComplexityMode],
+  );
+
+  const avatarMenuColor = 'neutral';
+
+  return (
+    <Box
+      component='li'
+      role='chat-message'
+      data-message-id={messageId}
+      tabIndex={-1 /* for shortcuts navigation */}
+      onMouseUp={(ENABLE_BUBBLE && !fromSystem /*&& !isAssistantError*/) ? handleBlocksMouseUp : undefined}
+      onTouchEnd={(ENABLE_BUBBLE && !fromSystem /*&& !isAssistantError*/) ? handleBlocksTouchEnd : undefined}
+      sx={listItemSx}
+      // className={messagePendingIncomplete ? 'agi-border-4' /* CSS Effect while in progress */ : undefined}
+    >
+
+      {/* (Optional) top decorator */}
+      {props.topDecorator}
+
+
+      {/* Mobile: Compact sticky header (tap avatar/label area to scroll message into view) */}
+      {props.isMobile && !props.hideAvatar && (
+        <CMMobileHeader
+          icon={fromUser ? null : messageAvatarIcon}
+          label={null}
+          timestamp={fromUser ? messageUpdated || messageCreated : null}
+          pending={!!messagePendingIncomplete}
+          showSpacer
+          backgroundColor={fromUser ? 'background.surface' : backgroundColor}
+          menuVariant={opsMenuAnchor ? 'soft' : 'plain'}
+          menuColor={avatarMenuColor}
+          onHeaderClick={handleMobileHeaderTap}
+          onClick={handleAvatarClick}
+          onContextMenu={handleOpsMenuToggle}
+          onEditApply={isEditingText ? handleEditsApplyClicked : undefined}
+          onEditCancel={handleEditsCancel}
+        />
+      )}
+
+      {/* Mobile: Edit controls when header is hidden (e.g., Beam mode) */}
+      {props.isMobile && !!props.hideAvatar && isEditingText && (
+        <Box bgcolor={backgroundColor} sx={messageEditBeamControlsTopSx}>
+          <Button size='sm' color='neutral' variant='plain' onClick={handleEditsCancel} startDecorator={<CloseRoundedIcon />} sx={_styles.mtButton}>
+            Cancel
+          </Button>
+          <Button size='sm' color='warning' onClick={handleEditsApplyClicked} startDecorator={<CheckRoundedIcon />} sx={_styles.mtButton} style={{ minWidth: 100 }}>
+            Done
+          </Button>
+        </Box>
+      )}
+
+      {/* Message Row: Aside, Fragment[][], Aside2 (Desktop) or Full-width (Mobile) */}
+      <Box
+        role={undefined /* aside | message | ops */}
+        sx={props.isMobile ? _styles.msgBodyMobile : ((fromAssistant && !isEditingText) ? _styles.msgBody : _styles.msgBodyReverse)}
+      >
+
+        {/* [start-Avatar] Avatar (Persona) - Desktop only */}
+        {!props.isMobile && !props.hideAvatar && !isEditingText && !fromAssistant && (
+          <CMDesktopAvatar
+            icon={messageAvatarIcon}
+            label={null}
+            tooltip={null}
+            zenMode={zenMode}
+            pending={!!messagePendingIncomplete}
+            menuOpen={!!opsMenuAnchor}
+            menuColor={avatarMenuColor}
+            onClick={handleAvatarClick}
+            onContextMenu={handleOpsMenuToggle}
+          />
+        )}
+
+        {/* [start-Edit] Fragments Edit: Apply - Desktop only */}
+        {!props.isMobile && isEditingText && (
+          <Box sx={messageAsideColumnSx} className='msg-edit-button'>
+            <Tooltip arrow disableInteractive placement='top-end' title='Apply Text Edits'>
+              <IconButton size='sm' variant='solid' color='warning' onClick={handleEditsApplyClicked}>
+                <CheckRoundedIcon />
+              </IconButton>
+            </Tooltip>
+            <Typography level='body-xs' sx={editButtonWrapSx}>
+              Done
+            </Typography>
+          </Box>
+        )}
+
+
+        {/* V-Fragments: Image Attachments | Content | Doc Attachments */}
+        <Box ref={blocksRendererRef /* restricts the BUBBLE menu to the children of this */} sx={{
+          ...fragmentsListSx,
+          ...(fromUser && !isEditingText && {
+            flexGrow: 0, width: 'fit-content', maxWidth: { xs: '92%', md: '78%' }, ml: 'auto',
+            bgcolor: '#0F2A2A', border: '1px solid rgba(0, 255, 179, .2)',
+            borderRadius: 'lg', px: 1.75, py: 1.25,
+            textAlign: 'left', overflowWrap: 'anywhere',
+            '& [aria-label="message body"]': { justifyContent: 'stretch' },
+          }),
+        }}>
+
+          {!props.isMobile && fromAssistant && !props.hideAvatar && !isEditingText && (
+            <CMDesktopAvatar
+              horizontal icon={messageAvatarIcon} label={null} tooltip={null}
+              zenMode={zenMode} pending={!!messagePendingIncomplete} menuOpen={!!opsMenuAnchor} menuColor={avatarMenuColor}
+              onClick={handleAvatarClick} onContextMenu={handleOpsMenuToggle}
+            />
+          )}
+
+          {/* (optional) Message date */}
+          {(props.showBlocksDate === true && !!(messageUpdated || messageCreated)) && (
+            <Typography level='body-sm' sx={{ mx: 1.5, textAlign: fromAssistant ? 'left' : 'right' }}>
+              <TimeAgo date={messageUpdated || messageCreated} />
+            </Typography>
+          )}
+
+          {/* (special case) System modified warning */}
+          {fromSystem && messageHasBeenEdited && (
+            <Typography level='body-sm' color='warning' sx={{ mt: 1, mx: 1.5, textAlign: 'end' }}>
+              modified by user - auto-update disabled
+            </Typography>
+          )}
+
+          {/* In-Reference-To Bubble */}
+          {!!messageMetadata?.inReferenceTo?.length && (
+            <InReferenceToList items={messageMetadata.inReferenceTo} />
+          )}
+
+          {/* [NOT SYSTEM, UNREAL] Image Attachment Fragments - just for a prettier display on top of the message, but is "WRONG" logically as the text comes before the image */}
+          {!fromSystem && imageAttachments.length >= 1 && (
+            <ImageAttachmentFragments
+              imageAttachments={imageAttachments}
+              contentScaling={adjContentScaling}
+              messageRole={messageRole}
+              isEditing={isEditingText}
+              onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
+            />
+          )}
+
+          {/* Annotation Fragments (absolute top: citations, references) */}
+          {annotationFragments.length >= 1 && (
+            <VoidFragments
+              voidFragments={annotationFragments}
+              nonVoidFragmentsCount={contentFragments.length}
+              contentScaling={adjContentScaling}
+              uiComplexityMode={uiComplexityMode}
+              messageRole={messageRole}
+              messagePendingIncomplete={messagePendingIncomplete}
+              onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
+              onFragmentReplace={!onMessageFragmentReplace ? undefined : handleFragmentReplace}
+            />
+          )}
+
+          {/* Interleaved Fragments (reasoning + content in temporal order) */}
+          <ContentFragments
+            contentFragments={renderInterleavedFragments}
+            showEmptyNotice={!messageFragments.length && !messagePendingIncomplete}
+
+            contentScaling={adjContentScaling}
+            uiComplexityMode={uiComplexityMode}
+            blocksStretch={props.blocksStretch ?? messageFullWidth}
+            fitScreen={props.fitScreen}
+            isMobile={props.isMobile}
+            messageRole={messageRole}
+            messageGeneratorLlmId={messageGenerator?.mgt === 'aix' ? messageGenerator.aix?.mId : undefined}
+            messagePendingIncomplete={messagePendingIncomplete}
+            inFluxFragmentId={inFluxFragmentId}
+            disableMarkdownText={disableMarkdown || fromUser /* User messages are edited as text. Try to have them in plain text. NOTE: This may bite. */}
+            htmlRenderVariant={props.htmlRenderVariant}
+
+            textEditsState={textContentEditState}
+            setEditedText={(!onMessageFragmentReplace || messagePendingIncomplete) ? undefined : handleRenderedTextEdit}
+            onEditsApply={handleApplyAllEdits}
+            onEditsCancel={handleEditsCancel}
+
+            onFragmentAddBlank={!onMessageFragmentAppend ? undefined : handleFragmentNew}
+            onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
+            onFragmentReplace={!onMessageFragmentReplace ? undefined : handleFragmentReplace}
+            onMessageDelete={!onMessageDelete ? undefined : handleMessageDelete}
+
+            onDoubleClick={(onMessageFragmentReplace /*&& doubleClickToEdit disabled, as we may have shift too */) ? handleBlocksDoubleClick : undefined}
+          />
+
+          {/* [#1114] Resolve Vertex AI grounding redirect links in place */}
+          {vertexLinksCount >= 1 && !messagePendingIncomplete && !isEditingText && !!onMessageFragmentReplace && (
+            <BlockOpResolveLinks
+              contentScaling={adjContentScaling}
+              linksCount={vertexLinksCount}
+              onResolve={handleResolveVertexLinks}
+            />
+          )}
+
+          {/* Document Fragments */}
+          {nonImageAttachments.length >= 1 && (
+            <DocumentAttachmentFragments
+              attachmentFragments={nonImageAttachments}
+              messageRole={messageRole}
+              contentScaling={adjContentScaling}
+              isMobile={props.isMobile}
+              zenMode={zenMode}
+              allowSelection={!isEditingText}
+              disableMarkdownText={disableMarkdown}
+              onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
+              onFragmentReplace={!onMessageFragmentReplace ? undefined : handleFragmentReplace}
+            />
+          )}
+
+          {/* [Edit Mode] Add new attachments (right below the Document Fragments) */}
+          {isEditingText && !fromAssistant && !!onMessageFragmentAppend && (
+            <ChatMessageEditAttachments
+              ref={attachmentsEditRef}
+              isMobile={props.isMobile}
+            />
+          )}
+
+          {/* [SYSTEM, REAL] Image Attachment Fragments - just for a realistic display below the system instruction text/docs */}
+          {fromSystem && imageAttachments.length >= 1 && (
+            <ImageAttachmentFragments
+              imageAttachments={imageAttachments}
+              contentScaling={adjContentScaling}
+              messageRole={messageRole}
+              isEditing={isEditingText}
+              onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
+            />
+          )}
+
+          {/* Continue... */}
+          {props.isBottom && fromAssistant && msgGenOutOfTokens && !!onMessageContinue && (
+            <BlockOpContinue
+              contentScaling={adjContentScaling}
+              messageRole={messageRole}
+              onContinue={handleMessageContinue}
+            />
+          )}
+
+          {/* Upstream Resume - shows whenever there's a stored handle (incl. post-reload, and while streaming so Stop can cancel the upstream run) */}
+          {props.isBottom && fromAssistant && messageGenerator?.upstreamHandle && (!!onMessageUpstreamResume || !!onMessageUpstreamDelete) && (
+            <BlockOpUpstreamResume
+              upstreamHandle={messageGenerator.upstreamHandle}
+              pending={messagePendingIncomplete}
+              inFlightMode={props.upstreamResumeMode}
+              onResume={onMessageUpstreamResume ? handleUpstreamResume : undefined}
+              onDetach={onMessageUpstreamDetach ? handleUpstreamDetach : undefined}
+              onDelete={onMessageUpstreamDelete ? handleUpstreamDelete : undefined}
+            />
+          )}
+
+          {/* Continue Options... */}
+          {continuationOptions.length >= 1 && !!onMessageContinue && (
+            <BlockOpOptions
+              contentScaling={adjContentScaling}
+              options={continuationOptions}
+              onContinue={handleMessageContinue}
+            />
+          )}
+
+          {/* Char & Word count */}
+          {/*{!zenMode && !isEditingText && !messagePendingIncomplete && fragmentFlattenedText.length > 0 && (*/}
+          {/*  <Typography level='body-xs' sx={{ mx: 1.5, mt: 0.5, textAlign: fromAssistant ? 'left' : 'right', opacity: 0.5 }}>*/}
+          {/*    {fragmentFlattenedText.length.toLocaleString()} chars · {(fragmentFlattenedText.match(/\S+/g) || []).length.toLocaleString()} words*/}
+          {/*  </Typography>*/}
+          {/*)}*/}
+
+        </Box>
+
+
+        {/* [end-Edit] Fragments Edit: Cancel - Desktop only */}
+        {!props.isMobile && isEditingText && (
+          <Box sx={messageAsideColumnSx} className='msg-edit-button'>
+            <Tooltip arrow disableInteractive placement='top-start' title='Discard Edits'>
+              <IconButton size='sm' variant='solid' onClick={handleEditsCancel}>
+                <CloseRoundedIcon />
+              </IconButton>
+            </Tooltip>
+            <Typography level='body-xs' sx={editButtonWrapSx}>
+              Cancel
+            </Typography>
+          </Box>
+        )}
+
+      </Box>
+
+
+      {/* Overlay copy icon */}
+      {/*{ENABLE_COPY_MESSAGE_OVERLAY && !fromSystem && !isEditingText && (*/}
+      {/*  <Tooltip title={messagePendingIncomplete ? null : (fromAssistant ? 'Copy message' : 'Copy input')} variant='solid'>*/}
+      {/*    <IconButton*/}
+      {/*      variant='outlined' onClick={handleOpsMessageCopySrc}*/}
+      {/*      sx={{*/}
+      {/*        position: 'absolute', ...(fromAssistant ? { right: { xs: 12, md: 28 } } : { left: { xs: 12, md: 28 } }), zIndex: 10,*/}
+      {/*        opacity: 0, transition: 'opacity 0.16s cubic-bezier(.17,.84,.44,1)',*/}
+      {/*      }}>*/}
+      {/*      <ContentCopyIcon />*/}
+      {/*    </IconButton>*/}
+      {/*  </Tooltip>*/}
+      {/*)}*/}
+
+
+      {/* Message Operations Menu (3 dots) */}
+      {!!opsMenuAnchor && (
+        <ChatMessageMenu
+          anchor={opsMenuAnchor}
+          onClose={handleOpsMenuClose}
+
+          isMobile={props.isMobile}
+          isBottom={!!props.isBottom}
+          fromAssistant={fromAssistant}
+          fromSystem={fromSystem}
+          canTextDiagram={couldDiagram}
+          canTextImagine={couldImagine}
+          canTextSpeak={couldSpeak}
+          isEditingText={isEditingText}
+          isPendingIncomplete={!!messagePendingIncomplete}
+          isTextImagining={!!props.isImagining}
+          isUserMessageSkipped={isUserMessageSkipped}
+          isUserNotifyComplete={isUserNotifyComplete}
+          userNotifyCompleteLlmId={(messageGenerator?.mgt === 'aix' ? messageGenerator.aix?.mId : undefined) ?? null}
+          isUserStarred={isUserStarred}
+          isVndAndCacheAuto={isVndAndCacheAuto}
+          isVndAndCacheUser={isVndAndCacheUser}
+          showVndAntCaching={uiComplexityMode === 'extra' && !!props.showAntPromptCaching && !isUserMessageSkipped}
+
+          onMessageDelete={!onMessageDelete ? undefined : handleMessageDelete}
+          onMessageUserFlagToggle={!onMessageToggleUserFlag ? undefined : handleMessageUserFlagToggle}
+          onOpsAssistantFrom={!onMessageAssistantFrom ? undefined : handleOpsAssistantFrom}
+          onOpsBeamFrom={!onMessageBeam ? undefined : handleOpsBeamFrom}
+          onOpsBranchFrom={!onMessageBranch ? undefined : handleOpsBranchFrom}
+          onOpsMessageCopySrc={handleOpsMessageCopySrc}
+          onOpsMessageEditToggle={!onMessageFragmentReplace ? undefined : handleOpsMessageEditToggle}
+          onOpsMessageTruncate={!onMessageTruncate ? undefined : handleOpsMessageTruncate}
+          onOpsShowInfo={handleOpsShowInfo}
+          onOpsTextDiagram={!onTextDiagram ? undefined : handleOpsTextDiagram}
+          onOpsTextImagine={!onTextImagine ? undefined : handleOpsTextImagine}
+          onOpsTextSpeak={!onTextSpeak ? undefined : handleOpsTextSpeak}
+        />
+      )}
+
+
+      {/* Bubble Over Toolbar */}
+      {ENABLE_BUBBLE && !!bubbleAnchor && (
+        <Popper placement='top-start' open={true} anchorEl={bubbleAnchor} slotProps={{
+          root: { style: { zIndex: themeZIndexChatBubble } },
+        }}>
+          <ClickAwayListener onClickAway={handleBubbleClickAway}>
+            <ButtonGroup
+              variant='plain'
+              sx={{
+                '--ButtonGroup-separatorColor': 'none !important',
+                '--ButtonGroup-separatorSize': 0,
+                borderRadius: '0',
+                backgroundColor: 'background.popup',
+                border: '1px solid',
+                borderColor: 'primary.outlinedBorder',
+                boxShadow: '0px 4px 24px -8px rgb(var(--joy-palette-neutral-darkChannel) / 50%)',
+                mb: 1.5,
+                ml: -1.5,
+                alignItems: 'center',
+                '& > button': {
+                  '--Icon-fontSize': 'var(--joy-fontSize-lg, 1.125rem)',
+                  minHeight: '2.5rem',
+                  minWidth: '2.75rem',
+                },
+              }}
+            >
+              {/* Bubble Add Reference */}
+              {!!onAddInReferenceTo && <Tooltip disableInteractive arrow placement='top' title={props.hasInReferenceTo ? 'Reply to this too' : fromAssistant ? 'Reply' : 'Refer To'}>
+                <IconButton color='primary' onClick={handleOpsAddInReferenceTo}>
+                  {props.hasInReferenceTo ? <ReplyAllRoundedIcon sx={{ fontSize: 'xl' }} /> : <ReplyRoundedIcon sx={{ fontSize: 'xl' }} />}
+                </IconButton>
+              </Tooltip>}
+              {/*{!!onMessageBeam && fromAssistant && <Tooltip disableInteractive arrow placement='top' title='Beam'>*/}
+              {/*  <IconButton color='primary'>*/}
+              {/*    <ChatBeamIcon sx={{ fontSize: 'xl' }} />*/}
+              {/*  </IconButton>*/}
+              {/*</Tooltip>}*/}
+              {!!onAddInReferenceTo && <Divider />}
+
+              {/* Text Tools (edits fragment, only for assistant messages) */}
+              {fromAssistant && <Tooltip disableInteractive arrow placement='top' title='Highlight Text'>
+                <IconButton disabled={!handleHighlightSelText} onClick={!handleHighlightSelText ? undefined : () => {
+                  handleHighlightSelText('highlight');
+                  closeBubble();
+                }}>
+                  <MarkHighlightIcon hcolor={handleHighlightSelText ? 'yellow' : undefined} />
+                </IconButton>
+              </Tooltip>}
+              {fromAssistant && <Tooltip disableInteractive arrow placement='top' title='Strike Through'>
+                <IconButton disabled={!handleHighlightSelText} onClick={!handleHighlightSelText ? undefined : () => {
+                  handleHighlightSelText('strike');
+                  closeBubble();
+                }}>
+                  <StrikethroughSIcon />
+                </IconButton>
+              </Tooltip>}
+              {fromAssistant && <Tooltip disableInteractive arrow placement='top' title='Toggle Bold'>
+                <IconButton disabled={!handleHighlightSelText} onClick={!handleHighlightSelText ? undefined : () => {
+                  handleHighlightSelText('strong');
+                  closeBubble();
+                }}>
+                  <FormatBoldIcon />
+                </IconButton>
+              </Tooltip>}
+              {fromAssistant && <Tooltip disableInteractive arrow placement='top' title='Cut Text'>
+                <IconButton disabled={!handleHighlightSelText} onClick={!handleHighlightSelText ? undefined : () => {
+                  handleHighlightSelText('cut');
+                  closeBubble();
+                }}>
+                  <ContentCutIcon />
+                </IconButton>
+              </Tooltip>}
+              {fromAssistant && <Divider />}
+
+              {/* Intelligent functions */}
+              {onTextDiagram && <Tooltip disableInteractive arrow placement='top' title={couldDiagram ? 'Auto-Diagram...' : 'Too short to Auto-Diagram'}>
+                <IconButton color='success' onClick={couldDiagram ? handleOpsTextDiagram : undefined}>
+                  <PhTreeStructure sx={{ color: couldDiagram ? 'primary' : 'neutral.plainDisabledColor' }} />
+                </IconButton>
+              </Tooltip>}
+              {onTextImagine && <Tooltip disableInteractive arrow placement='top' title='Auto-Draw'>
+                <IconButton color='success' onClick={handleOpsTextImagine} disabled={!couldImagine || props.isImagining}>
+                  {!props.isImagining ? <FormatPaintOutlinedIcon /> : <CircularProgress sx={{ '--CircularProgress-size': '16px' }} />}
+                </IconButton>
+              </Tooltip>}
+              {onTextSpeak && <Tooltip disableInteractive arrow placement='top' title='Speak'>
+                <IconButton color='success' onClick={handleOpsTextSpeak} disabled={!couldSpeak || props.isSpeaking}>
+                  {!props.isSpeaking ? <PhVoice /> : <CircularProgress sx={{ '--CircularProgress-size': '16px' }} />}
+                </IconButton>
+              </Tooltip>}
+              {(onTextDiagram || onTextImagine || onTextSpeak) && <Divider />}
+
+              {/* Bubble Copy */}
+              <Tooltip disableInteractive arrow placement='top' title='Copy Selection'>
+                <IconButton onClick={handleBubbleCopyDOM}>
+                  <ContentCopyIcon />
+                </IconButton>
+              </Tooltip>
+
+              {/* Selection char & word count */}
+              {!!selText && <Divider />}
+              {!!selText && (
+                <Typography level='body-xs' sx={{ px: 1, whiteSpace: 'nowrap' }}>
+                  {selText.length.toLocaleString()}c · {(selText.match(/\S+/g) || []).length.toLocaleString()}w
+                </Typography>
+              )}
+
+            </ButtonGroup>
+          </ClickAwayListener>
+        </Popper>
+      )}
+
+
+      {/* Message Info Modal */}
+      {showInfoModal && (
+        <ChatMessageInfoPopup
+          open
+          onClose={handleInfoClose}
+          message={props.message}
+        />
+      )}
+
+    </Box>
+  );
+}

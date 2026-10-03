@@ -1,0 +1,110 @@
+import { createDConversation } from '~/common/stores/chat/chat.conversation';
+import { createDMessageFromFragments } from '~/common/stores/chat/chat.message';
+import { zipSync, strToU8 } from 'fflate';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, readdir, utimes } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { emptyWorkspace, validateWorkspace, reviveAssetDates } from '~/common/personal/workspace-schema';
+import { commitWorkspace, loadWorkspace, recoverWorkspace, backupWorkspace, restoreWorkspace, writeAsset, workspaceRecoveryRevision } from './workspace';
+test('atomic saves reject stale revision and recover last-good after corruption', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-test-'));
+  const first = await commitWorkspace(emptyWorkspace(), 0, dir);
+  assert.equal(first.revision, 1);
+  await assert.rejects(commitWorkspace(first, 0, dir), /newer data/);
+  await commitWorkspace(first, 1, dir);
+  await writeFile(join(dir, 'workspace.json'), 'corrupt');
+  await assert.rejects(loadWorkspace(dir), /corrupt/);
+  const recovered = await recoverWorkspace(dir);
+  assert.equal(recovered.revision, 2);
+  assert.ok(recovered.revisionEpoch);
+  await assert.rejects(commitWorkspace(first, 2, dir), /newer data/);
+  assert.equal((await commitWorkspace(recovered, 2, dir, recovered.revisionEpoch)).revision, 3);
+});
+test('asset bytes must exist before a manifest commit and round trip through backup', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-assets-'));
+  const workspace = emptyWorkspace();
+  const { _abortController, ...chat } = createDConversation();
+  chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'image', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'a', mimeType: 'text/plain', bytesSize: 3 } } }])];
+  workspace.stores['app-chats'] = { version: 5, state: { conversations: [chat] } };
+  workspace.assets.a = { size: 3, mime: 'text/plain', metadata: { createdAt: '2026-10-03T10:00:00.000Z' } };
+  await assert.rejects(commitWorkspace(workspace, 0, dir), /missing/);
+  await writeAsset('a', new Uint8Array([1, 2, 3]), dir);
+  await commitWorkspace(workspace, 0, dir);
+  const backup = await backupWorkspace(dir);
+  const other = await mkdtemp(join(tmpdir(), 'ai-gui-restored-'));
+  assert.equal((await restoreWorkspace(backup, 0, other)).revision, 1);
+  assert.deepEqual([...await readFile(join(other, 'assets', 'a'))], [1, 2, 3]);
+  assert.ok(reviveAssetDates(workspace).assets.a.metadata.createdAt instanceof Date);
+});
+test('workspace schema excludes providers, credentials and incognito chats', () => {
+  assert.throws(() => validateWorkspace({ ...emptyWorkspace(), stores: { 'app-models': { version: 1, state: {} } } }));
+  assert.throws(() => validateWorkspace({ ...emptyWorkspace(), stores: { 'app-chats': { version: 5, state: { conversations: [{ id: 'a', messages: [], _isIncognito: true }] } } } }));
+});
+
+test('deep validation rejects malformed records and dangling references without replacing primary', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-malformed-'));
+  const saved = await commitWorkspace(emptyWorkspace(), 0, dir);
+  const before = await readFile(join(dir, 'workspace.json'), 'utf8');
+  const bad = { ...saved, stores: { 'app-chats': { version: 5, state: { conversations: [{ id: 'chat', messages: [{ id: 'message', role: 'assistant' }] }] } } } };
+  await assert.rejects(commitWorkspace(bad, 1, dir));
+  await assert.rejects(restoreWorkspace(zipSync({ 'workspace.json': strToU8(JSON.stringify(bad)) }), 1, dir));
+  assert.equal(await readFile(join(dir, 'workspace.json'), 'utf8'), before);
+  assert.throws(() => validateWorkspace({ ...saved, stores: { 'app-folders': { version: 1, state: { enableFolders: true, folders: [{ id: 'p', title: 'P', instructions: '', revision: 0, conversationIds: [], fileIds: ['missing'] }] } } } }), /missing/);
+});
+test('restore preserves corrupt primary and enforces readable primary revision', async () => {
+  const source = await mkdtemp(join(tmpdir(), 'ai-gui-backup-source-'));
+  await commitWorkspace(emptyWorkspace(), 0, source); const bytes = await backupWorkspace(source);
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-corrupt-restore-'));
+  await writeFile(join(dir, 'workspace.json'), 'original corrupt bytes');
+  assert.deepEqual(await workspaceRecoveryRevision(dir), { revision: 'corrupt' });
+  await assert.rejects(restoreWorkspace(bytes, 0, dir), /changed/);
+  assert.equal((await restoreWorkspace(bytes, null, dir)).revision, 1);
+  const recovery = (await readdir(dir)).find(name => name.startsWith('workspace.recovery-'))!;
+  assert.equal(await readFile(join(dir, recovery), 'utf8'), 'original corrupt bytes');
+  await assert.rejects(restoreWorkspace(bytes, 0, dir), /changed/);
+  const restored = (await loadWorkspace(dir)).workspace!;
+  await assert.rejects(restoreWorkspace(bytes, 1, dir), /changed/);
+  assert.equal((await restoreWorkspace(bytes, 1, dir, restored.revisionEpoch)).revision, 2);
+});
+test('legacy assets larger than 10 MB survive backup and restore; old unowned bytes collect after commit', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-large-asset-'));
+  const workspace = emptyWorkspace(); const { _abortController, ...chat } = createDConversation();
+  const bytes = new Uint8Array(10 * 1024 * 1024 + 1); bytes[0] = 1;
+  chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'img', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'large', mimeType: 'image/png', bytesSize: bytes.length } } }])];
+  workspace.stores['app-chats'] = { version: 5, state: { conversations: [chat] } };
+  workspace.assets.large = { size: bytes.length, mime: 'image/png', metadata: {} };
+  await writeAsset('large', bytes, dir); await writeAsset('orphan', new Uint8Array([1]), dir);
+  const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000); await utimes(join(dir, 'assets', 'orphan'), old, old);
+  const saved = await commitWorkspace(workspace, 0, dir); assert.equal(saved.assets.large.size, bytes.length);
+  assert.ok(!(await readdir(join(dir, 'assets'))).includes('orphan'));
+  const backup = await backupWorkspace(dir); const restored = await mkdtemp(join(tmpdir(), 'ai-gui-large-restored-'));
+  await restoreWorkspace(backup, 0, restored); assert.equal((await readFile(join(restored, 'assets', 'large'))).length, bytes.length);
+  await commitWorkspace(emptyWorkspace(), 1, dir); assert.ok((await readdir(join(dir, 'assets'))).includes('large'));
+});
+
+
+test('corrupt first-save restore rejects every legacy token and every former recovery epoch', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ai-gui-epochs-'));
+  const first = await commitWorkspace(emptyWorkspace(), 0, dir);
+  const bytes = await backupWorkspace(dir);
+  const corrupt = 'corrupt first revision without last-good';
+  await writeFile(join(dir, 'workspace.json'), corrupt);
+  await assert.rejects(recoverWorkspace(dir), /No last good/);
+  const restored = await restoreWorkspace(bytes, null, dir);
+  assert.equal(restored.revision, first.revision);
+  await assert.rejects(commitWorkspace(first, first.revision, dir), /newer data/);
+  await assert.rejects(commitWorkspace(first, first.revision, dir, crypto.randomUUID()), /newer data/);
+  const second = await commitWorkspace(restored, restored.revision, dir, restored.revisionEpoch);
+  await writeFile(join(dir, 'workspace.json'), 'second corrupt primary');
+  const recovered = await recoverWorkspace(dir);
+  assert.notEqual(recovered.revisionEpoch, second.revisionEpoch);
+  await assert.rejects(commitWorkspace(second, recovered.revision, dir, second.revisionEpoch), /newer data/);
+  await assert.rejects(restoreWorkspace(bytes, recovered.revision, dir, second.revisionEpoch), /changed/);
+  const copies = await Promise.all((await readdir(dir)).filter(name => name.startsWith('workspace.recovery-')).map(name => readFile(join(dir, name), 'utf8')));
+  assert.ok(copies.includes(corrupt)); assert.ok(copies.includes('second corrupt primary'));
+  const before = await readFile(join(dir, 'workspace.json'));
+  await assert.rejects(restoreWorkspace(zipSync({ 'workspace.json': strToU8(JSON.stringify({ ...emptyWorkspace(), stores: { 'app-chats': { version: 5, state: { conversations: [{}] } } } })) }), recovered.revision, dir, recovered.revisionEpoch));
+  assert.deepEqual(await readFile(join(dir, 'workspace.json')), before);
+});
