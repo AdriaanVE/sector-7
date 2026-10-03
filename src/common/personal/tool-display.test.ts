@@ -209,7 +209,7 @@ for (const streaming of [true, false]) test(`native ${streaming ? 'SSE' : 'JSON'
   for (const particle of pt.flushParticles()) reassembler.enqueueWireParticle(particle);
   await reassembler.waitForWireComplete();
   const result = reassembler.finalizeReassembly();
-  assert.equal(result.fragments.some(fragment => fragment.ft !== '_ft_sentinel' && fragment.part.pt === 'ph'), false);
+  assert.equal(result.fragments.some(fragment => fragment.part.pt === 'ph'), false);
   const before = JSON.stringify(result.generator.nativeHistory);
   assert.equal(completedToolSummary(result.fragments, false, false, result.generator.nativeHistory), 'Searched the web, web fetch failed');
   assert.equal(JSON.stringify(result.generator.nativeHistory), before);

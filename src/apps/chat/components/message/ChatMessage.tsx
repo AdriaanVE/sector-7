@@ -1155,6 +1155,8 @@ export function ChatMessage(props: {
           {/*  </Typography>*/}
           {/*)}*/}
 
+          {fromAssistant && !messagePendingIncomplete && !isEditingText && <Box component='span' data-reply-end={messageId} aria-hidden='true' sx={{ display: 'block', height: '1px', width: '1px', pointerEvents: 'none' }} />}
+
         </Box>
 
 
