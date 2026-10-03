@@ -1,5 +1,4 @@
 import { gcProjectCache } from './project-gc';
-import { attentionLabel } from './attention';
 import { ChatAttentionIndicator } from './ChatAttention';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -77,7 +76,6 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
     {migrationSummary && <Alert size='sm' endDecorator={<IconButton size='sm' aria-label='Dismiss migration notice' onClick={() => useFolderStore.getState().dismissMigrationSummary()}><CloseIcon /></IconButton>}>{migrationSummary}</Alert>}
     {folders.map((project, index) => {
       const projectChats = conversations.filter(chat => project.conversationIds.includes(chat.id));
-      const attentionCount = projectChats.filter(chat => attentionLabel(chat)).length;
       const toggleExpanded = () => setExpanded(state => ({ ...state, [project.id]: !state[project.id] }));
       return <Box key={project.id} sx={{ minWidth: 0 }}>
         <Box sx={{
@@ -88,7 +86,7 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
         }}>
           <IconButton className='sector7-nav-control sector7-nav-icon' size='sm' variant='plain' color='neutral' aria-label={`${expanded[project.id] ? 'Collapse' : 'Expand'} ${project.title}`} aria-expanded={!!expanded[project.id]} onClick={toggleExpanded}>{expanded[project.id] ? <FolderOpenOutlinedIcon sx={{ fontSize: 18 }} /> : <FolderOutlinedIcon sx={{ fontSize: 18 }} />}</IconButton>
           <Button className='sector7-nav-control sector7-nav-project' size='sm' variant='plain' color='neutral' aria-expanded={!!expanded[project.id]} onClick={toggleExpanded} sx={{ flex: 1, overflow: 'hidden' }}>
-            <Box component='span' sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.title}{attentionCount ? ` (${attentionCount})` : ''}</Box>
+            <Box component='span' sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.title}</Box>
           </Button>
           <Dropdown>
             <MenuButton ref={button => { if (button) menuButtons.current.set(project.id, button); else menuButtons.current.delete(project.id); }} className='sector7-nav-control sector7-nav-icon sector7-project-actions' size='sm' variant='plain' color='neutral' aria-label={`Actions for ${project.title}`}><MoreHorizIcon sx={{ fontSize: 18 }} /></MenuButton>

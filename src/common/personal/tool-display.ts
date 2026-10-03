@@ -1,6 +1,7 @@
-import type { DMessageFragment, DVoidPlaceholderMOp } from '~/common/stores/chat/chat.fragments';
+import type { DMessageFragment, DMessageToolResponsePart, DVoidPlaceholderMOp } from '~/common/stores/chat/chat.fragments';
 import type { Immutable } from '~/common/types/immutable.types';
 import type { Phase } from './attention';
+import type { NativeHistory } from './native-history';
 
 /** Display projections never replace the stored provider history. */
 export function toolDisplayFragments(fragments: readonly Immutable<DMessageFragment>[], showAll: boolean, hideProgress = false): Immutable<DMessageFragment>[] {
@@ -126,4 +127,121 @@ function nativeOperationLabel(operation: Immutable<DVoidPlaceholderMOp>): string
   }
   if (operation.mot === 'code-exec') return 'Running code';
   return 'Generating an image';
+}
+
+
+const summaryCategories = {
+  list: ['Listed files', 'File listing'],
+  read: ['Read files', 'File reads'],
+  search: ['Searched files', 'File search'],
+  write: ['Updated files', 'File updates'],
+  move: ['Moved files', 'File moves'],
+  delete: ['Deleted files', 'File deletion'],
+  command: ['Ran commands', 'Commands'],
+  web: ['Searched the web', 'Web search'],
+  fetch: ['Fetched web pages', 'Web fetch'],
+  code: ['Ran code', 'Code execution'],
+  image: ['Generated images', 'Image generation'],
+  tool: ['Used tools', 'Tools'],
+} as const;
+type SummaryCategory = keyof typeof summaryCategories;
+type SummaryState = 'done' | 'failed' | 'stopped' | 'incomplete';
+
+function functionSummaryCategory(name: string): SummaryCategory {
+  switch (name) {
+    case 'folder_list': return 'list';
+    case 'folder_read': return 'read';
+    case 'folder_search': return 'search';
+    case 'folder_write': case 'folder_edit': return 'write';
+    case 'folder_move': return 'move';
+    case 'folder_delete': return 'delete';
+    case 'local_command': return 'command';
+    case 'web_search': return 'web';
+    case 'web_fetch': return 'fetch';
+    case 'code_execution': return 'code';
+    default: return 'tool';
+  }
+}
+
+function nativeSummaryCategory(operation: Immutable<DVoidPlaceholderMOp>): SummaryCategory {
+  if (operation.mot === 'gen-image') return 'image';
+  if (operation.mot === 'search-web') {
+    // Providers retain either a fetch status or explicit URL input in their operation log.
+    return /^(?:Fetch|Retrieved)/i.test(operation.text) || operation.iTexts?.some(text => /^(?:URL:\s*|https?:\/\/)/i.test(text)) ? 'fetch' : 'web';
+  }
+  if (/^(?:Bash|Executing bash|Running bash)/.test(operation.text)) return 'command';
+  if (/^(?:Viewed file|Viewing )/.test(operation.text)) return 'read';
+  if (/^(?:File updated|File created|Edit applied|Creating |Editing |Inserting |Undoing |Editor)/.test(operation.text)) return 'write';
+  if (/^(?:Code executed|Executing code|Execution error|Executing\.\.\.|Running code|Writing code|Written code)/.test(operation.text)) return 'code';
+  return 'tool';
+}
+
+function jsonObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function responseSummaryState(part: Immutable<DMessageToolResponsePart>): SummaryState {
+  // Local command receipts can report an unsuccessful exit without setting the tool error flag.
+  let result: Record<string, unknown> = {};
+  try {
+    result = jsonObject(JSON.parse(part.response.result)) ?? {};
+  } catch { /* Other providers may return plain text. */ }
+  if (result.stopped === true || result.status === 'cancelled' || result.status === 'interrupted') return 'stopped';
+  if (part.error || result.error || ['failed', 'timed_out', 'output_limit'].includes(String(result.status))) return 'failed';
+  if (part.response.type === 'function_call' && part.response.name === 'local_command' && result.status !== 'succeeded') return 'incomplete';
+  return result.status === 'running' ? 'incomplete' : 'done';
+}
+
+/** A fixed vocabulary derived from saved outcomes, never tool arguments or answer prose. */
+export function completedToolSummary(fragments: readonly Immutable<DMessageFragment>[], showAll = false, pending = false, nativeHistory?: Immutable<NativeHistory>): string | null {
+  if (showAll || pending) return null;
+  const operations = new Map<string, { category: SummaryCategory; state: SummaryState }>();
+  // Clean provider completion removes transient opLog placeholders. Durable native blocks remain.
+  for (const segment of nativeHistory?.segments ?? []) {
+    for (const block of segment.content) {
+      if (block.type === 'server_tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
+        const input = jsonObject(block.input);
+        const category = block.name === 'bash_code_execution' ? 'command'
+          : block.name === 'text_editor_code_execution' ? input?.command === 'view' ? 'read' : 'write'
+            : functionSummaryCategory(block.name);
+        operations.set(block.id, { category, state: 'incomplete' });
+      } else if (block.type.endsWith('_tool_result') && typeof block.tool_use_id === 'string') {
+        const operation = operations.get(block.tool_use_id);
+        if (!operation) continue;
+        const content = jsonObject(block.content);
+        const error = typeof content?.type === 'string' && content.type.endsWith('_error');
+        const exitFailed = typeof content?.return_code === 'number' && content.return_code !== 0;
+        const confirmed = Array.isArray(block.content) || typeof content?.type === 'string' && content.type.endsWith('_result');
+        operations.set(block.tool_use_id, { ...operation, state: error || exitFailed ? 'failed' : confirmed ? 'done' : 'incomplete' });
+      }
+    }
+  }
+  for (const fragment of fragments) {
+    if (fragment.ft === '_ft_sentinel') continue;
+    const { part } = fragment;
+    if (part.pt === 'tool_invocation') {
+      if (part.invocation.type === 'function_call' && part.invocation.name === 'ask_user_question') continue;
+      if (!operations.has(part.id)) operations.set(part.id, {
+        category: part.invocation.type === 'code_execution' ? 'code' : functionSummaryCategory(part.invocation.name), state: 'incomplete',
+      });
+    } else if (part.pt === 'tool_response') {
+      if (part.response.type === 'function_call' && part.response.name === 'ask_user_question') continue;
+      operations.set(part.id, {
+        category: part.response.type === 'code_execution' ? 'code' : functionSummaryCategory(part.response.name), state: responseSummaryState(part),
+      });
+    } else if (part.pt === 'ph') {
+      for (const operation of part.opLog ?? []) operations.set(operation.opId, {
+        category: nativeSummaryCategory(operation),
+        state: operation.state === 'done' ? 'done' : operation.state === 'active' ? 'incomplete'
+          : operation.oTexts?.includes('Terminated with reason: done-client-aborted') ? 'stopped' : 'failed',
+      });
+    }
+  }
+  const labels = new Set<string>();
+  for (const { category, state } of operations.values()) {
+    const [done, task] = summaryCategories[category];
+    const label = state === 'done' ? done : `${task} ${state}`;
+    labels.add(label);
+  }
+  return labels.size ? [...labels].map((label, index) => index ? label.charAt(0).toLowerCase() + label.slice(1) : label).join(', ') : null;
 }

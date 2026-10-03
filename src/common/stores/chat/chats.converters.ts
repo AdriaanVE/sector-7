@@ -1,4 +1,6 @@
 import { CHAT_MODELS, normalizeChatConfig } from '~/common/personal/chat-config';
+import { normalizeQuestionHistory } from '~/common/personal/question-history';
+import type { Attention } from '~/common/personal/attention';
 
 import type { SystemPurposeId } from '../../../data';
 
@@ -40,14 +42,15 @@ export namespace V4ToHeadConverters {
     c._abortController = null;
     c.chatConfig = normalizeChatConfig(c.chatConfig, recoveredChatModel(c.messages || []));
 
-    if (c.messages?.some(message => message.pendingIncomplete)) c.lastOutcome = 'interrupted';
-
     // fixup .messages[]
     if (!c.messages)
       c.messages = [];
 
+    // Capture question interruption before message cleanup removes pendingIncomplete.
+    const attention = normalizeQuestionHistory(c);
     for (const message of c.messages)
       inMemHeadCleanDMessage(message, validLiveFileIDs);
+    Object.assign(c, attention);
   }
 
 
@@ -187,6 +190,10 @@ export namespace V3StoreDataToHead {
     } = ic;
 
     const cc = createDConversation(systemPurposeId as SystemPurposeId);
+    if ('pendingQuestions' in ic) cc.pendingQuestions = ic.pendingQuestions;
+    if ('lastCompletedMessageId' in ic) cc.lastCompletedMessageId = ic.lastCompletedMessageId;
+    if ('lastSeenMessageId' in ic) cc.lastSeenMessageId = ic.lastSeenMessageId;
+    if ('lastOutcome' in ic) cc.lastOutcome = ic.lastOutcome;
     if (id) cc.id = id;
     cc.messages = messages.map(_recreateMessage);
     if (userTitle) cc.userTitle = userTitle;
@@ -196,6 +203,7 @@ export namespace V3StoreDataToHead {
     if (updated) cc.updated = updated;
     cc.tokenCount = ('tokenCount' in ic) ? ic.tokenCount || 0 : cc.tokenCount || 0;
 
+    V4ToHeadConverters.inMemHeadCleanDConversations([cc]);
     return cc;
   }
 
@@ -229,7 +237,6 @@ export namespace V3StoreDataToHead {
       if (updated) cm.updated = updated;
 
     }
-    V4ToHeadConverters.inMemHeadCleanDMessage(cm, liveFileGetAllValidIDs());
     return cm;
   }
 
@@ -347,6 +354,7 @@ export namespace DataAtRestV1 {
       messages: ec.messages,
       systemPurposeId: ec.systemPurposeId,
       chatConfig: ec.chatConfig,
+      ...normalizeQuestionHistory(ec),
       userTitle: ec.userTitle,
       autoTitle: ec.autoTitle,
       created: ec.created,
@@ -364,7 +372,7 @@ export namespace DataAtRestV1 {
     folders?: { folders: RestFolderJsonV1[]; enableFolders: boolean };
   }
 
-  export type RestChatJsonV1 = {
+  export type RestChatJsonV1 = Attention & {
     chatConfig?: DConversation['chatConfig'];
     id: string;
     messages: (DMessage | V3StoreDataToHead.ImportMessageV3)[];

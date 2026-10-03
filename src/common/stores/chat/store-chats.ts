@@ -96,7 +96,9 @@ export const useChatStore = create<ConversationsStore>()(/*devtools(*/
        */
       importConversation: (conversation: DConversation, preventClash: boolean): DConversationId => {
         const { conversations } = _get();
-        conversation.pendingQuestions = []; conversation.lastCompletedMessageId = undefined; conversation.lastSeenMessageId = undefined; conversation.lastOutcome = undefined;
+
+        // Validate and normalize before changing IDs or interrupting an existing chat.
+        V4ToHeadConverters.inMemHeadCleanDConversations([conversation]);
 
         // if there's a clash, abort the former conversation, and optionally change the ID
         const existing = conversations.find(_c => _c.id === conversation.id);
@@ -107,10 +109,6 @@ export const useChatStore = create<ConversationsStore>()(/*devtools(*/
             console.warn('Conversation ID clash, changing ID to', conversation.id);
           }
         }
-
-        // every path that leads here should have an equivalent function ran, however, for extra
-        // caution, we sanitize and re-run this here, to upgrade the message to the current version
-        V4ToHeadConverters.inMemHeadCleanDConversations([conversation]);
 
         conversation.tokenCount = updateMessagesTokenCounts(conversation.messages, true, 'importConversation');
 
