@@ -1,10 +1,12 @@
 # Local workspace data
 
-The Node service writes `workspace.json` atomically with a revision check. `workspace.last-good.json` keeps the previous commit. Draft and incognito bytes stay in the disposable browser cache. Referenced durable assets are promoted before their manifest entry commits. Browser IndexedDB and Dexie data are read caches after the one-time migration.
+The Node service writes `workspace.json` atomically with a revision check. Saves, asset creation, backups and recovery share a kernel file lock across server routes and processes. A busy operation waits up to ten seconds before asking you to retry. A process crash releases its ownership automatically. `workspace.last-good.json` keeps the previous commit. Draft and incognito bytes stay in the disposable browser cache. Referenced durable assets are promoted before their manifest entry commits. Browser IndexedDB and Dexie data are read caches after the one-time migration.
 
 Startup waits for disk before hydrating durable stores. A missing first workspace permits importing legacy browser chats and project metadata; corrupt or unreachable storage enters recovery. Defaults never replace an unreadable workspace. Stale revisions require reloading the newer workspace. Failed saves remain visible with Retry.
 
 Settings shows the data directory and last confirmed save. Download backup flushes writes and creates a validated zip with assets. Restore validates detached records, references and staged asset bytes before committing, preserving the primary byte-for-byte even when corrupt. Readable primary revision and epoch are checked. Recovery and restore rotate the epoch, rejecting every previously issued save token, including corrupt first-save data without last-good metadata. Recovery uses the last good commit. Provider settings, credentials, transient recordings and incognito chats are excluded. Legacy chat JSON and Markdown exports remain available.
+
+Keep app data on a local filesystem that supports file locking; network mounts are not qualified. The permanent `.workspace.lock` file stays in the data directory and is excluded from backups. Never remove or replace it while an app instance is running. Installing the native lock dependency on macOS requires existing Xcode Command Line Tools and Python, and it must be compiled for the Node major version used to run the app.
 
 Do not edit a running workspace file manually. Stop the user-started server before filesystem maintenance. Remote sandbox files remain remote-only until downloaded; downloaded artifacts save locally before the browser download is offered.
 

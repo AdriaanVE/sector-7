@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { emptyWorkspace, safeId, validateWorkspace, workspaceAssetIds, Workspace } from '~/common/personal/workspace-schema';
+import { withWorkspaceLock, WorkspaceLockBusyError } from './workspace-lock';
 
 export class WorkspaceError extends Error {
   constructor(message: string, public status = 409) { super(message); }
@@ -22,14 +23,17 @@ async function readWorkspaceFile(path: string): Promise<Workspace | null> {
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw new WorkspaceError('Workspace is corrupt. Recover the last good save or restore a backup.', 422); }
 }
 
-/** Serialized operations protect revisions within this Node server process. */
-let operation: Promise<unknown> = Promise.resolve();
-function exclusive<T>(run: () => Promise<T>): Promise<T> {
-  const result = operation.then(run, run); operation = result.catch(() => undefined); return result;
+/** Each operation locks the actual data directory across route bundles and Node processes. */
+async function exclusive<T>(directory: string, run: () => Promise<T>): Promise<T> {
+  try { return await withWorkspaceLock(directory, run); }
+  catch (error) {
+    if (error instanceof WorkspaceLockBusyError) throw new WorkspaceError(error.message, 503);
+    throw error;
+  }
 }
 
 export async function loadWorkspace(directory = dataDirectory()) {
-  return exclusive(async () => {
+  return exclusive(directory, async () => {
     const workspace = await readWorkspaceFile(join(directory, 'workspace.json'));
     if (workspace) await verifyAssets(workspace, directory);
     return { workspace, directory };
@@ -37,7 +41,7 @@ export async function loadWorkspace(directory = dataDirectory()) {
 }
 
 export async function workspaceRecoveryRevision(directory = dataDirectory()) {
-  return exclusive(async () => {
+  return exclusive(directory, async () => {
     try { const current = await readWorkspaceFile(join(directory, 'workspace.json')); return { revision: current?.revision ?? 0, revisionEpoch: current?.revisionEpoch }; }
     catch (error) { if (error instanceof WorkspaceError && error.status === 422) return { revision: 'corrupt' }; throw error; }
   });
@@ -52,7 +56,7 @@ async function verifyAssets(workspace: Workspace, directory: string) {
 }
 
 export async function commitWorkspace(value: unknown, expectedRevision: number, directory = dataDirectory(), expectedEpoch?: string): Promise<Workspace> {
-  return exclusive(async () => {
+  return exclusive(directory, async () => {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new WorkspaceError('Expected workspace revision is invalid.', 400);
     const current = await readWorkspaceFile(join(directory, 'workspace.json'));
     if ((current?.revision ?? 0) !== expectedRevision || current?.revisionEpoch !== expectedEpoch) throw new WorkspaceError('Another browser saved newer data. Reload this workspace before editing.');
@@ -71,6 +75,11 @@ export async function commitWorkspace(value: unknown, expectedRevision: number, 
 }
 
 export async function writeAsset(id: string, bytes: Uint8Array, directory = dataDirectory()) {
+  return exclusive(directory, () => writeAssetUnlocked(id, bytes, directory));
+}
+
+/** Caller owns the directory lock, or writes into private restore staging. */
+async function writeAssetUnlocked(id: string, bytes: Uint8Array, directory: string) {
   safeId.parse(id);
   await mkdir(join(directory, 'assets'), { recursive: true });
   const path = join(directory, 'assets', id);
@@ -83,11 +92,11 @@ export async function writeAsset(id: string, bytes: Uint8Array, directory = data
 }
 
 export async function readAsset(id: string, directory = dataDirectory()) {
-  safeId.parse(id); return await readFile(join(directory, 'assets', id));
+  safeId.parse(id); return exclusive(directory, () => readFile(join(directory, 'assets', id)));
 }
 
 export async function recoverWorkspace(directory = dataDirectory()) {
-  return exclusive(async () => {
+  return exclusive(directory, async () => {
     const good = await readWorkspaceFile(join(directory, 'workspace.last-good.json'));
     if (!good) throw new WorkspaceError('No last good save exists. Restore a backup.', 404);
     await verifyAssets(good, directory);
@@ -102,14 +111,14 @@ export async function recoverWorkspace(directory = dataDirectory()) {
 }
 
 export async function backupWorkspace(directory = dataDirectory()) {
-  return exclusive(async () => {
+  return exclusive(directory, async () => {
     const workspace = await readWorkspaceFile(join(directory, 'workspace.json'));
     if (!workspace) throw new WorkspaceError('Save the workspace before creating a backup.', 404);
     const owned = workspaceAssetIds(workspace);
     workspace.assets = Object.fromEntries(Object.entries(workspace.assets).filter(([id]) => owned.has(id)));
     await verifyAssets(workspace, directory);
     const files: Record<string, Uint8Array> = { 'workspace.json': strToU8(JSON.stringify(workspace)) };
-    for (const id of Object.keys(workspace.assets)) files[`assets/${id}`] = await readAsset(id, directory);
+    for (const id of Object.keys(workspace.assets)) files[`assets/${id}`] = await readFile(join(directory, 'assets', id));
     return zipSync(files);
   });
 }
@@ -133,11 +142,11 @@ export async function restoreWorkspace(bytes: Uint8Array, expectedRevision: numb
   try {
     for (const [id, asset] of Object.entries(workspace.assets)) {
       if (!files[`assets/${id}`] || files[`assets/${id}`].length !== asset.size) throw new WorkspaceError(`Backup asset ${id} is missing or incomplete.`, 422);
-      await writeAsset(id, files[`assets/${id}`], staged);
+      await writeAssetUnlocked(id, files[`assets/${id}`], staged);
     }
     await verifyAssets(workspace, staged);
     await atomicWrite(join(staged, 'workspace.json'), JSON.stringify(workspace));
-    return await exclusive(async () => {
+    return await exclusive(directory, async () => {
       let current: Workspace | null = null; let corrupt = false;
       try { current = await readWorkspaceFile(join(directory, 'workspace.json')); }
       catch (error) { if (!(error instanceof WorkspaceError) || error.status !== 422) throw error; corrupt = true; }
@@ -146,7 +155,7 @@ export async function restoreWorkspace(bytes: Uint8Array, expectedRevision: numb
       // Copy the primary byte-for-byte, including invalid JSON, before replacement.
       await preservePrimary(directory);
       await mkdir(join(directory, 'assets'), { recursive: true });
-      for (const id of Object.keys(workspace.assets)) await writeAsset(id, files[`assets/${id}`], directory);
+      for (const id of Object.keys(workspace.assets)) await writeAssetUnlocked(id, files[`assets/${id}`], directory);
       const next = { ...workspace, revision: (current?.revision ?? 0) + 1, revisionEpoch: crypto.randomUUID(), migrated: true };
       if (current) await atomicWrite(join(directory, 'workspace.last-good.json'), JSON.stringify(current));
       await atomicWrite(join(directory, 'workspace.json'), JSON.stringify(next));
