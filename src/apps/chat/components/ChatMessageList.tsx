@@ -1,3 +1,6 @@
+import { ChatActivityLine } from '~/common/personal/ChatActivityLine';
+import { usePersonalSettings } from '~/common/personal/store-personal-settings';
+import { hasVisibleAnswer, toolDisplayFragments } from '~/common/personal/tool-display';
 import { assertNoPendingQuestion } from '~/common/personal/questions';
 import { TurnNavigator } from '~/common/personal/TurnNavigator';
 import { QuestionCard } from '~/common/personal/QuestionCard';
@@ -20,7 +23,7 @@ import { DConversationId, excludeSystemMessages } from '~/common/stores/chat/cha
 import { ShortcutKey, useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
 import { clipboardInterceptCtrlCForCleanup } from '~/common/util/clipboardUtils';
 import { convertFilesToDAttachmentFragments } from '~/common/attachment-drafts/attachment.pipeline';
-import { createDMessageFromFragments, createDMessageTextContent, DMessage, DMessageGenerator, DMessageId, DMessageUserFlag, DMetaReferenceItem, MESSAGE_FLAG_AIX_SKIP, messageHasUserFlag } from '~/common/stores/chat/chat.message';
+import { createDMessageFromFragments, createDMessageTextContent, DMessage, DMessageGenerator, DMessageId, DMessageUserFlag, DMetaReferenceItem, MESSAGE_FLAG_AIX_SKIP, messageHasUserFlag, messageWasOutOfTokens } from '~/common/stores/chat/chat.message';
 import { createTextContentFragment, DMessageFragment, DMessageFragmentId } from '~/common/stores/chat/chat.fragments';
 import { getRenderHTMLInitial } from '~/common/stores/store-ui';
 import { openFileForAttaching } from '~/common/components/ButtonAttachFiles';
@@ -69,6 +72,7 @@ export function ChatMessageList(props: {
 
   // external state
   const { notifyBooting } = useScrollToBottom();
+  const showToolCalls = usePersonalSettings(state => state.showToolCalls);
   const [showSystemMessages] = useChatShowSystemMessages();
   const { conversationMessages, historyTokenCount } = useChatStore(useShallow(({ conversations }) => {
     const conversation = conversations.find(conversation => conversation.id === props.conversationId);
@@ -77,8 +81,9 @@ export function ChatMessageList(props: {
       historyTokenCount: conversation ? conversation.tokenCount : 0,
     };
   }));
-  const { _composerInReferenceToCount, ephemerals } = useChatOverlayStore(props.conversationHandler?.conversationOverlayStore ?? null, useShallow(state => ({
+  const { _composerInReferenceToCount, ephemerals, activityOpId } = useChatOverlayStore(props.conversationHandler?.conversationOverlayStore ?? null, useShallow(state => ({
     _composerInReferenceToCount: state.inReferenceTo?.length ?? 0,
+    activityOpId: state.activity?.opId,
     ephemerals: state.ephemerals?.length ? state.ephemerals : null,
   })));
 
@@ -437,6 +442,8 @@ export function ChatMessageList(props: {
       </Box>
     );
 
+  const visibleMessages = showToolCalls || props.isMessageSelectionMode ? filteredMessages : filteredMessages.filter(message => message.role !== 'assistant' || message.generator?.upstreamHandle || messageWasOutOfTokens(message.generator) || hasVisibleAnswer(toolDisplayFragments(message.fragments, false, activityOpId === message.id)));
+
   return (
     <List role='chat-messages-list' sx={listSx} onCopy={clipboardInterceptCtrlCForCleanup}>
 
@@ -455,7 +462,7 @@ export function ChatMessageList(props: {
         />
       )}
 
-      {filteredMessages.map((message, idx) => {
+      {visibleMessages.map((message, idx) => {
 
           return props.isMessageSelectionMode ? (
 
@@ -475,7 +482,8 @@ export function ChatMessageList(props: {
               fitScreen={props.fitScreen}
               hasInReferenceTo={composerHasInReferenceTo}
               isMobile={props.isMobile}
-              isBottom={idx === filteredMessages.length - 1}
+              isBottom={idx === visibleMessages.length - 1}
+              hideActivityPlaceholder={activityOpId === message.id}
               isImagining={isImagining}
               isSpeaking={isSpeaking}
               showAntPromptCaching={props.chatLLMAntPromptCaching}
@@ -503,6 +511,8 @@ export function ChatMessageList(props: {
           );
         },
       )}
+
+      <ChatActivityLine conversationId={conversationId} />
 
       {/* Render ephemerals (sidebar ReAct output widgets) at the bottom */}
       {!!ephemerals?.length && !!conversationHandler && (

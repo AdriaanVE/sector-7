@@ -16,7 +16,7 @@ import { createVariformOverlayStoreSlice, VariformOverlayStore } from './store-p
  * This is for now, but if performance is an issue, we can split it back into independent
  * vanilla stores, and just instantiate many of them per each ConversationHandler.
  */
-export type PerChatOverlayStore = { activity: { opId: string; phase: Phase; detail?: string } | null } & AttachmentsDraftsStore & ComposerOverlayStore & EphemeralsOverlayStore & VariformOverlayStore;
+export type PerChatOverlayStore = { activity: { opId: string; phase: Phase; detail?: string; toolId?: string } | null } & AttachmentsDraftsStore & ComposerOverlayStore & EphemeralsOverlayStore & VariformOverlayStore;
 
 /* Note: at this time there is another overlay stores, beam (vanilla).
  * - EphemeralsStore was based on EventTarget and subscription/unsubscription to it (inside useEffect),
