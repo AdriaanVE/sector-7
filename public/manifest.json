@@ -1,0 +1,65 @@
+{
+  "name": "Sector 7",
+  "short_name": "Sector 7",
+  "theme_color": "#060F14",
+  "background_color": "#060F14",
+  "description": "Personal local Claude workspace with projects and folder context.",
+  "categories": [
+    "productivity",
+    "AI",
+    "tool",
+    "utilities"
+  ],
+  "display": "standalone",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/link/share_target",
+      "accept": {
+        "application/big-agi": [
+          ".agi",
+          ".agi.json"
+        ]
+      }
+    }
+  ],
+  "share_target": {
+    "action": "/link/share_target",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "New Voice Chat",
+      "url": "/?newChat=voiceInput",
+      "description": "Start a new chat with voice input",
+      "icons": [
+        {
+          "src": "/icons/icon-voicechat-96x96.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

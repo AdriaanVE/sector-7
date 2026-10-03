@@ -1,0 +1,185 @@
+import * as React from 'react';
+import { Typography } from '@mui/joy';
+
+import type { DLLMId } from '~/common/stores/llms/llms.types';
+import { abortWithReason } from '~/common/util/errorUtils';
+import { createDMessageEmpty, DMessage, messageSetGeneratorNamed } from '~/common/stores/chat/chat.message';
+import { createPlaceholderVoidFragment } from '~/common/stores/chat/chat.fragments';
+
+import type { BFusion, FusionUpdateOrFn } from '../beam.gather';
+import { executeGatherInstruction, GatherInstruction } from './GatherInstruction';
+import { GATHER_PLACEHOLDER } from '../../beam.config';
+import { executeUserInputChecklistInstruction, UserInputChecklistInstruction } from './UserInputChecklistInstruction';
+
+
+/// [Asynchronous Instruction Framework] ///
+
+export interface BaseInstruction {
+  type: string;
+  label: string;
+}
+
+export interface ExecutionInputState {
+  // inputs
+  readonly chatMessages: DMessage[];
+  readonly rayMessages: DMessage[];
+  readonly llmId: DLLMId;
+  readonly contextRef: string; // not useful
+  // interaction
+  readonly chainAbortController: AbortController;
+  readonly updateProgressComponent: (component: React.ReactNode) => void;
+  readonly updateInstructionComponent: (component: React.ReactNode) => void;
+  // output1 -> input2
+  readonly intermediateDMessage: DMessage;
+  // snapshot of the intermediate into BFusion.outputDMessage - the card header (timer, live metrics) and body follow the merge as they follow a ray
+  readonly publishIntermediateToOutput: (hideFragments?: boolean) => void;
+}
+
+export type Instruction = GatherInstruction | UserInputChecklistInstruction;
+
+
+export function gatherStartFusion(
+  initialFusion: Readonly<BFusion>,
+  chatMessages: DMessage[],
+  rayMessages: DMessage[],
+  onUpdateBFusion: (update: FusionUpdateOrFn) => void,
+) {
+
+  // abort any current fusion
+  const { instructions } = initialFusion;
+  abortWithReason(initialFusion.fusingAbortController, 'Merge Stopped');
+
+  // validate preconditions
+  const onError = (errorText: string) => onUpdateBFusion({
+    stage: 'error',
+    errorText: errorText,
+    fusingAbortController: undefined,
+  });
+  if (instructions.length < 1)
+    return onError('No fusion instructions available');
+  if (chatMessages.length < 1)
+    return onError('No conversation history available');
+  if (rayMessages.length <= 1)
+    return onError('Needs two responses at least');
+  if (!initialFusion.llmId)
+    return onError('No Merge model selected');
+
+
+  // full execution state
+  const inputState: ExecutionInputState = {
+    // inputs
+    chatMessages: chatMessages,
+    rayMessages: rayMessages,
+    llmId: initialFusion.llmId,
+    contextRef: initialFusion.fusionId,
+    // interaction
+    chainAbortController: new AbortController(),
+    updateProgressComponent: (component: React.ReactNode) => onUpdateBFusion({ fusingProgressComponent: component }),
+    updateInstructionComponent: (component: React.ReactNode) => onUpdateBFusion({ fusingInstructionComponent: component }),
+    // output1 -> input2
+    intermediateDMessage: createDMessageEmpty('assistant'), // [state] assistant:Fusion_pending
+    publishIntermediateToOutput: (hideFragments) => onUpdateBFusion({
+      outputDMessage: {
+        ...inputState.intermediateDMessage,
+        ...(hideFragments && { fragments: [] }),
+      },
+    }),
+  };
+  messageSetGeneratorNamed(inputState.intermediateDMessage, 'Merge');
+
+
+  // BFusion: startup full status reset
+  onUpdateBFusion({
+    // status
+    stage: 'fusing',
+    fusedInputsCount: rayMessages.length,
+    errorText: undefined,
+    outputDMessage: undefined,
+
+    // execution progress
+    fusingAbortController: inputState.chainAbortController,
+    fusingProgressComponent: undefined,
+    fusingInstructionComponent: undefined,
+  });
+
+
+  // Execute the instructions in sequence
+  type PipedValueType = string;
+  const chainedInitialValue: PipedValueType = '';
+  let promiseChain: Promise<PipedValueType> = Promise.resolve(chainedInitialValue);
+  for (const instruction of instructions) {
+    promiseChain = promiseChain.then((precedingValue: PipedValueType) => {
+      // You can use chainedValue here, if needed
+      inputState.updateProgressComponent(
+        <Typography
+          level='body-sm'
+          sx={{ color: 'text.secondary' }}
+        >
+          {instructions.length > 1 && <>{1 + instructions.indexOf(instruction)}/{instructions.length} · </>}
+          {instruction.label} ...
+        </Typography>,
+      );
+
+      // reset the intermediate message
+      inputState.intermediateDMessage.fragments = [createPlaceholderVoidFragment(GATHER_PLACEHOLDER)];
+      inputState.intermediateDMessage.pendingIncomplete = true;
+      inputState.intermediateDMessage.updated = null;
+      inputState.updateInstructionComponent(undefined); // every step starts with a clean instruction slot
+
+      // return the promise from the instruction
+      switch (instruction.type) {
+        case 'gather':
+          return executeGatherInstruction(instruction, inputState, precedingValue);
+        case 'user-input-checklist':
+          return executeUserInputChecklistInstruction(instruction, inputState, precedingValue);
+        default:
+          return Promise.reject(new Error('Unsupported Merge instruction'));
+      }
+    });
+  }
+
+  // Chain completion handlers
+  promiseChain
+    .then(() => {
+      onUpdateBFusion({
+        stage: 'success',
+        errorText: undefined,
+        fusingProgressComponent: undefined,
+      });
+    })
+    .catch((error) => {
+      // User abort: no need to show an error
+      if (inputState.chainAbortController.signal.aborted) {
+        return onUpdateBFusion({
+          stage: 'stopped',
+          // errorText: 'Merge Canceled.',
+          fusingProgressComponent: undefined,
+        });
+      }
+
+      // Error handling
+      onUpdateBFusion({
+        stage: 'error',
+        errorText: 'Issue: ' + (error?.message || error?.toString() || 'Unknown error'),
+        fusingProgressComponent: undefined, // stops the spinner
+      });
+    })
+    .finally(() => onUpdateBFusion({
+      // let the intermediate be the final output
+      outputDMessage: inputState.intermediateDMessage,
+      fusingAbortController: undefined,
+      fusingInstructionComponent: undefined,
+    }));
+}
+
+
+export function gatherStopFusion(fusion: BFusion): BFusion {
+  fusion.inputsWait?.cancel(); // not started yet: the stage is untouched
+  abortWithReason(fusion.fusingAbortController, 'Merge Stopped');
+  return {
+    ...fusion,
+    ...(fusion.stage === 'fusing' ? { stage: 'stopped' /* optimistic as the abort shall do the same */ } : {}),
+    inputsWait: undefined,
+    fusingAbortController: undefined,
+  };
+}

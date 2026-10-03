@@ -1,0 +1,58 @@
+import * as React from 'react';
+import { useRouter } from 'next/router';
+
+import { getChatTokenCountingMethod } from '../../apps/chat/store-app-chat';
+
+import { llmsRefreshStaleServicesOnBoot } from '~/common/logic/llmsRefreshStaleServicesOnBoot';
+import { logger } from '~/common/logger/logger.client';
+import { ROUTE_APP_CHAT } from '~/common/app.routes';
+import { preloadTiktokenLibrary } from '~/common/tokens/tokens.text';
+import { useClientLoggerInterception } from '~/common/logger/hooks/useClientLoggerInterception';
+import { useNextLoadProgress } from '~/common/components/useNextLoadProgress';
+
+
+export function ProviderBootstrapLogic(props: { children: React.ReactNode }) {
+
+  // external state
+  const { route, events } = useRouter();
+
+  // AUTO-LOG events from this scope on; note that we are past the Sherpas
+  useClientLoggerInterception(true, false);
+
+  // wire-up the NextJS router to a loading bar to be displayed while routes change
+  useNextLoadProgress(route, events);
+
+
+  // [boot-up] logic
+  const isOnChat = route === ROUTE_APP_CHAT;
+
+  // decide what to launch
+  const launchPreload = isOnChat && getChatTokenCountingMethod() === 'accurate'; // only preload if using TikToken by default
+  const launchAutoConf = isOnChat;
+
+
+  // [preload] kick-off a preload of the Tiktoken library right when proceeding to the UI
+  React.useEffect(() => {
+    if (!launchPreload) return;
+
+    void preloadTiktokenLibrary() // fire/forget (large WASM payload)
+      .catch(err => {
+        // Suppress WebAssembly loading errors - app will fall back to approximate counting
+        // These commonly occur when users navigate away or have slow connections
+        logger.debug('Tiktoken preload failed (expected on slow/interrupted loads)', err, 'client', {
+          skipReporting: true, // Don't send to PostHog - this is a benign error
+        });
+      });
+
+  }, [launchPreload]);
+
+  // [autoconf] boot refresh of the stale models services (new server-side keys, changed model definitions) if on the chat
+  React.useEffect(() => {
+    if (!launchAutoConf) return;
+
+    void llmsRefreshStaleServicesOnBoot(true, true); // fire/forget (background)
+
+  }, [launchAutoConf]);
+
+  return props.children;
+}
