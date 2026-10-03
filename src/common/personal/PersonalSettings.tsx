@@ -44,7 +44,7 @@ export function PersonalSettings() {
       <Typography level='title-md'>Workspace data</Typography>
       <Typography level='body-sm' sx={{ fontFamily: 'code', overflowWrap: 'anywhere', color: 'text.secondary' }}>{disk.directory}</Typography>
       <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>{disk.lastSaved ? `Last saved ${new Date(disk.lastSaved).toLocaleTimeString()}` : 'No save confirmed in this session.'}</Typography>
-      {error && <Alert color='danger'>{error}</Alert>}
+      {(error || disk.error) && <Alert color='danger'>{error || disk.error}</Alert>}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         <Button size='sm' onClick={() => { void downloadWorkspaceBackup().catch(error => setError(error.message)); }}>Download backup</Button>
         <Button size='sm' variant='outlined' color='neutral' onClick={() => restoreInputRef.current?.click()}>Restore backup</Button>

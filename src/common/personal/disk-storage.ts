@@ -2,7 +2,7 @@ import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import { create } from 'zustand';
 import { Workspace, emptyWorkspace, reviveAssetDates, STORE_NAMES, workspaceAssetIds, validateWorkspace } from './workspace-schema';
 
-export const useDiskStatus = create<{ ready: boolean; error: string | null; lastSaved: number | null; directory: string }>(() => ({ ready: false, error: null, lastSaved: null, directory: '' }));
+export const useDiskStatus = create<{ ready: boolean; error: string | null; conflict: boolean; lastSaved: number | null; directory: string }>(() => ({ ready: false, error: null, conflict: false, lastSaved: null, directory: '' }));
 let workspace = emptyWorkspace();
 let initialized = false;
 let paused = false;
@@ -13,10 +13,18 @@ let writing: Promise<void> | undefined;
 let failure: Error | undefined;
 const pendingAssets = new Map<string, LocalAsset>();
 
+export class LocalStorageHTTPError extends Error {
+  constructor(message: string, public status: number, public path: string) { super(message); }
+}
+
+export function assertDiskCurrent() {
+  if (useDiskStatus.getState().conflict) throw new Error('This tab has an older workspace. Download unsaved changes or reload the saved workspace before continuing.');
+}
+
 export async function localJSON(path: string, init?: RequestInit) {
   const response = await fetch(`/api/local/${path}`, { ...init, headers: { 'Content-Type': 'application/json', 'X-AI-GUI': '1', ...init?.headers } });
   const value = await response.json();
-  if (!response.ok) throw new Error(value.error || 'Local storage request failed.');
+  if (!response.ok) throw new LocalStorageHTTPError(value.error || 'Local storage request failed.', response.status, path);
   return value;
 }
 export function currentWorkspace() { return structuredClone(workspace); }
@@ -24,7 +32,7 @@ export function diskReady() { return initialized; }
 export function installWorkspace(next: Workspace, directory?: string) {
   workspace = reviveAssetDates(structuredClone(next)); initialized = true; failure = undefined; dirty = false; deadline = 0;
   if (timer) clearTimeout(timer);
-  useDiskStatus.setState({ ready: true, error: null, ...(directory ? { directory } : {}) });
+  useDiskStatus.setState({ ready: true, error: null, conflict: false, ...(directory ? { directory } : {}) });
 }
 export function pauseDiskWrites(value: boolean) { paused = value; if (!value && dirty) void flushDisk().catch(() => undefined); }
 
@@ -39,7 +47,7 @@ export function diskStorage<S>(): PersistStorage<S> {
       if (!initialized) return;
       workspace = { ...workspace, stores: { ...workspace.stores, [name]: structuredClone(value) } };
       dirty = true;
-      if (paused) return;
+      if (paused || useDiskStatus.getState().conflict) return;
       if (!deadline) deadline = Date.now() + 1234;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => { void flushDisk().catch(() => undefined); }, Math.max(0, Math.min(321, deadline - Date.now())));
@@ -49,6 +57,7 @@ export function diskStorage<S>(): PersistStorage<S> {
 }
 
 export async function flushDisk(drain = true): Promise<void> {
+  assertDiskCurrent();
   if (!initialized) throw new Error('Disk must load before saving.');
   if (paused) throw new Error('Workspace writes are paused. Retry after backup or restore.');
   if (timer) clearTimeout(timer);
@@ -64,11 +73,11 @@ export async function flushDisk(drain = true): Promise<void> {
       workspace = { ...workspace, assets: snapshot.assets, revision: result.workspace.revision, revisionEpoch: result.workspace.revisionEpoch, migrated: true };
       for (const id of Object.keys(snapshot.assets)) pendingAssets.delete(id);
       failure = undefined;
-      useDiskStatus.setState({ error: null, lastSaved: Date.now() });
+      useDiskStatus.setState({ error: null, conflict: false, lastSaved: Date.now() });
     } catch (error) {
       dirty = true;
       failure = error instanceof Error ? error : new Error('Disk save failed.');
-      useDiskStatus.setState({ error: failure.message });
+      useDiskStatus.setState({ error: failure.message, conflict: error instanceof LocalStorageHTTPError && error.status === 409 && error.path === 'workspace' });
       throw failure;
     } finally { writing = undefined; }
   })();
@@ -127,4 +136,24 @@ export async function downloadWorkspaceBackup() {
     const link = document.createElement('a'); link.href = url; link.download = 'ai-gui-backup.zip'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } finally { pauseDiskWrites(false); }
+}
+
+/** A local recovery copy includes the current unsaved records and every referenced original. */
+export async function unsavedWorkspaceCopy(cacheAsset: (id: string) => Promise<LocalAsset | undefined> = async (id: string) => (await import('~/modules/dblobs/dblobs.db')).getDBAsset(id)) {
+  const snapshot = currentWorkspace();
+  const assets: Record<string, LocalAsset> = {};
+  for (const id of workspaceAssetIds(snapshot)) {
+    const asset = pendingAssets.get(id) ?? await loadDiskAsset(id).catch(() => undefined) ?? await cacheAsset(id);
+    if (!asset) throw new Error(`Cannot preserve unsaved changes: asset ${id} is unavailable. Keep this tab open.`);
+    assets[id] = structuredClone({ ...asset, cache: {} });
+    snapshot.assets[id] = assetManifest(asset);
+  }
+  return { format: 'sector-7-unsaved-recovery', workspace: snapshot, assets };
+}
+
+export async function downloadUnsavedWorkspaceCopy() {
+  const copy = await unsavedWorkspaceCopy();
+  const url = URL.createObjectURL(new Blob([JSON.stringify(copy)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = 'sector-7-unsaved-recovery.json'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

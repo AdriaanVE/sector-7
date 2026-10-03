@@ -122,3 +122,74 @@ test('v4 legacy document rename validates detached import without losing content
   const canonical = structuredClone(normalized);
   assert.deepEqual(validateWorkspace(canonical), normalized);
 });
+
+test('stale save preserves local changes, blocks retries and generation, and clears only after install', async () => {
+  const { assertDiskCurrent, useDiskStatus, LocalStorageHTTPError, unsavedWorkspaceCopy } = await import('./disk-storage');
+  const originalFetch = globalThis.fetch;
+  pauseDiskWrites(false); installWorkspace(emptyWorkspace());
+  const chat = durableChat(); chat.messages = [createDMessageTextContent('user', 'Unsaved message')];
+  diskStorage().setItem('app-chats', { version: 5, state: { conversations: [chat] } });
+  let saves = 0;
+  globalThis.fetch = async () => { saves++; return Response.json({ error: 'Another browser saved newer data.' }, { status: 409 }); };
+  try {
+    const lastSaved = useDiskStatus.getState().lastSaved;
+    await assert.rejects(flushDisk(), error => error instanceof LocalStorageHTTPError && error.status === 409);
+    assert.equal(useDiskStatus.getState().conflict, true);
+    assert.equal(useDiskStatus.getState().lastSaved, lastSaved);
+    assert.throws(assertDiskCurrent, /older workspace/);
+    await assert.rejects(flushDisk(), /older workspace/); assert.equal(saves, 1);
+    diskStorage().setItem('app-personal-settings', { version: 1, state: { instructions: 'Still local' } });
+    await new Promise(resolve => setTimeout(resolve, 360)); assert.equal(saves, 1);
+    assert.equal((currentWorkspace().stores['app-chats']!.state.conversations as typeof chat[])[0].messages[0].fragments.length, 1);
+    const copy = await unsavedWorkspaceCopy();
+    assert.equal(copy.format, 'sector-7-unsaved-recovery'); assert.deepEqual(copy.workspace, currentWorkspace());
+    installWorkspace({ ...emptyWorkspace(), revision: 2 });
+    assert.equal(useDiskStatus.getState().conflict, false); assert.doesNotThrow(assertDiskCurrent);
+    assert.equal(currentWorkspace().revision, 2);
+  } finally { globalThis.fetch = originalFetch; pauseDiskWrites(true); }
+});
+
+test('temporary save failures retain retry and do not become stale conflicts', async () => {
+  const { useDiskStatus } = await import('./disk-storage');
+  const originalFetch = globalThis.fetch;
+  pauseDiskWrites(false); installWorkspace(emptyWorkspace());
+  diskStorage().setItem('app-personal-settings', { version: 1, state: { instructions: 'Retry me' } });
+  globalThis.fetch = async () => Response.json({ error: 'Workspace is busy' }, { status: 503 });
+  try {
+    await assert.rejects(flushDisk(), /busy/); assert.equal(useDiskStatus.getState().conflict, false);
+    globalThis.fetch = successfulFetch(); await flushDisk();
+    assert.equal(useDiskStatus.getState().error, null);
+    assert.equal(currentWorkspace().stores['app-personal-settings']!.state.instructions, 'Retry me');
+  } finally { globalThis.fetch = originalFetch; pauseDiskWrites(true); }
+});
+
+
+test('unsaved recovery copy retains pending original bytes without uploading them', async () => {
+  const { unsavedWorkspaceCopy } = await import('./disk-storage');
+  pauseDiskWrites(true); installWorkspace(emptyWorkspace());
+  const chat = durableChat();
+  chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'image', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'unsaved-image', mimeType: 'image/png', bytesSize: 3 } } }])];
+  await persistAsset({ id: 'unsaved-image', data: { mimeType: 'image/png', base64: 'AQID' }, cache: {}, scopeId: 'app-chat' });
+  diskStorage().setItem('app-chats', { version: 5, state: { conversations: [chat] } });
+  const copy = await unsavedWorkspaceCopy();
+  assert.equal(copy.assets['unsaved-image'].data.base64, 'AQID');
+  assert.equal(copy.workspace.assets['unsaved-image'].size, 3);
+  assert.doesNotThrow(() => validateWorkspace(copy.workspace));
+});
+
+
+test('unsaved copy falls back to disposable cached originals when disk retrieval fails', async () => {
+  const { unsavedWorkspaceCopy } = await import('./disk-storage');
+  const originalFetch = globalThis.fetch;
+  const workspace = emptyWorkspace(); const chat = durableChat();
+  chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'image', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'cached-original', mimeType: 'image/png', bytesSize: 3 } } }])];
+  workspace.stores['app-chats'] = { version: 5, state: { conversations: [chat] } };
+  workspace.assets['cached-original'] = { size: 3, mime: 'image/png', metadata: {} };
+  installWorkspace(workspace); pauseDiskWrites(true);
+  globalThis.fetch = async () => Response.json({ error: 'temporarily unavailable' }, { status: 503 });
+  try {
+    const copy = await unsavedWorkspaceCopy(async id => ({ id, data: { mimeType: 'image/png', base64: 'AQID' }, cache: {} }));
+    assert.equal(copy.assets['cached-original'].data.base64, 'AQID'); assert.doesNotThrow(() => validateWorkspace(copy.workspace));
+    await assert.rejects(unsavedWorkspaceCopy(async () => undefined), /Keep this tab open/);
+  } finally { globalThis.fetch = originalFetch; installWorkspace(emptyWorkspace()); }
+});

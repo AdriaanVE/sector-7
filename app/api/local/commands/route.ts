@@ -1,3 +1,4 @@
+import { readBoundedJSON } from '~/server/local/request-body';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authorizeFolderInvocation } from '~/server/local/folders';
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   try {
     const accessError = localAccessError(request.url, request.headers, request.method);
     if (accessError) throw new WorkspaceError(accessError, 403);
-    const value = requestSchema.parse(await request.json());
+    const value = requestSchema.parse(await readBoundedJSON(request));
     const scope = JSON.stringify([value.projectId, value.conversationId, value.folderId]);
     const manager = localCommandManager();
     if (value.action === 'start') {

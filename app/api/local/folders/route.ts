@@ -1,3 +1,4 @@
+import { readBoundedJSON } from '~/server/local/request-body';
 import { NextResponse } from 'next/server';
 import { failure } from '~/server/local/route-error';
 import { authorizeFolderInvocation, executeFolderTool, validateFolderPath } from '~/server/local/folders';
@@ -12,8 +13,7 @@ export async function POST(request: Request) {
   const denied = localAccessError(request.url, request.headers, request.method);
   if (denied) return NextResponse.json({ error: denied }, { status: 403 });
   try {
-    const text = await request.text(); if (text.length > 2 * 1024 * 1024) throw new Error('Folder request is too large.');
-    const value = JSON.parse(text);
+    const value = await readBoundedJSON(request);
     if (value.action === 'pick') return NextResponse.json(await pickNativeFolder(request.signal));
     if (value.action === 'connect') return NextResponse.json({ folder: await validateFolderPath(String(value.path)) });
     const input = folderToolInput.parse(value.input);

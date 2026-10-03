@@ -1,3 +1,4 @@
+import { assertDiskCurrent } from '~/common/personal/disk-storage';
 import { getChatLLMId } from '~/common/stores/llms/store-llms';
 
 import type { DConversationId } from '~/common/stores/chat/chat.conversation';
@@ -15,6 +16,7 @@ import { runPersonaOnConversationHead } from './chat-persona';
 
 
 export async function _handleExecute(chatExecuteMode: ChatExecuteMode, conversationId: DConversationId, executeCallerNameDebug: string) {
+  assertDiskCurrent();
 
   // Handle missing conversation
   if (!conversationId)
