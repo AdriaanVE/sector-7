@@ -11,7 +11,6 @@ import { answerQuestions, assertQuestionGeneration, continueQuestions, questionA
 import { getConversation } from '~/common/stores/chat/store-chats';
 import { runPersonaOnConversationHead } from '../../editors/chat-persona';
 import * as React from 'react';
-import { keyframes } from '@emotion/react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ColorPaletteProp, SxProps, VariantProp } from '@mui/joy/styles/types';
@@ -82,6 +81,7 @@ import { ComposerAttachmentDraftsList } from './llmattachments/ComposerAttachmen
 import { ComposerTextAreaActions } from './textarea/ComposerTextAreaActions';
 import { ComposerTextAreaDrawActions } from './textarea/ComposerTextAreaDrawActions';
 import { StatusBarMemo } from '../StatusBar';
+import { ComposerRim } from './ComposerRim';
 import { TokenBadgeMemo } from './tokens/TokenBadge';
 import { TokenProgressbarMemo } from './tokens/TokenProgressbar';
 import { useComposerDragDrop } from './useComposerDragDrop';
@@ -91,7 +91,6 @@ import { useRequestTokenPreview } from './tokens/useRequestTokenPreview';
 // configuration
 const zIndexComposerOverlayMic = 10;
 const SHOW_TIPS_AFTER_RELOADS = 25;
-const workingRim = keyframes({ '0%, 100%': { opacity: .3 }, '50%': { opacity: .65 } });
 
 
 const paddingBoxSx: SxProps = {
@@ -744,10 +743,10 @@ export function Composer(props: {
       component='section'
       bgcolor={showTint ? `var(--joy-palette-${showTint}-softBg)` : themeBgAppChatComposer}
       sx={[...(Array.isArray(props.sx) ? props.sx : [props.sx]), {
-        '&::after': assistantBusy ? { animation: `${workingRim} 3.6s ease-in-out infinite` } : { animation: 'none' },
-        '@media (prefers-reduced-motion: reduce)': { '&::after': { animation: 'none', opacity: 1 } },
+        '&:focus-within > .composer-rim .composer-border': { stroke: 'rgba(0,255,179,.65)' },
       }]}
     >
+      <ComposerRim />
 
       {!isMobile && labsShowShortcutBar && <StatusBarMemo toggleMinimized={handleToggleMinimized} isMinimized={isMinimized} />}
 
@@ -828,7 +827,7 @@ export function Composer(props: {
                     sx={{
                       height: '100%',
                       backgroundColor: 'transparent',
-                      '&:focus-within': { '--Textarea-focusedHighlight': 'var(--joy-palette-primary-solidBg)' },
+                      '--Textarea-focusedThickness': '0px',
                       lineHeight: lineHeightTextareaMd,
                     }} />
 

@@ -27,7 +27,7 @@ import { FoldersToggleOn } from '~/common/components/icons/FoldersToggleOn';
 import { OPTIMA_DRAWER_BACKGROUND } from '~/common/layout/optima/optima.config';
 import { OptimaDrawerList } from '~/common/layout/optima/drawer/OptimaDrawerList';
 import { capitalizeFirstLetter } from '~/common/util/textUtils';
-import { getIsMobile } from '~/common/components/useMatchMedia';
+import { getIsMobile, useIsMobile } from '~/common/components/useMatchMedia';
 import { optimaCloseDrawer, optimaOpenPreferences } from '~/common/layout/optima/useOptima';
 import { themeScalingMap, themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { useUIPreferencesStore } from '~/common/stores/store-ui';
@@ -97,6 +97,7 @@ function ChatDrawer(props: {
   const [renderLimit, setRenderLimit] = React.useState(200); // progressive loading limit
 
   // external state
+  const isMobile = useIsMobile();
   const {
     clearFilters,
     filterHasBeamOpen,
@@ -427,9 +428,9 @@ function ChatDrawer(props: {
 
       </OptimaDrawerList>
     </Box>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 2, py: 1, borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
-      <Button variant='plain' color='neutral' size='sm' startDecorator={<SettingsIcon sx={{ fontSize: 18 }} />} onClick={() => optimaOpenPreferences()}
-        sx={{ flex: 1, justifyContent: 'flex-start', minHeight: { xs: 40, sm: 36 } }}>Settings</Button>
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, px: 2, py: 1, borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+      {isMobile && <Button variant='plain' color='neutral' size='sm' startDecorator={<SettingsIcon sx={{ fontSize: 18 }} />} onClick={() => optimaOpenPreferences()}
+        sx={{ flex: 1, justifyContent: 'flex-start', minHeight: { xs: 40, sm: 36 } }}>Settings</Button>}
       <Dropdown>
         <MenuButton variant='plain' color='neutral' size='sm' aria-label='Chat data actions'><MoreVertIcon sx={{ fontSize: 20 }} /></MenuButton>
         <Menu sx={{ zIndex: themeZIndexOverMobileDrawer }}>

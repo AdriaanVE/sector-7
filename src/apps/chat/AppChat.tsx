@@ -112,12 +112,11 @@ const composerOpenSx: SxProps = {
   minWidth: 0, // don't get compresses too much on desktop
   // backgroundColor: themeBgAppChatComposer, // inlined in the Composer
   position: 'relative',
-  border: '1px solid rgba(168, 85, 247, .32)',
-  transition: 'border-color 180ms ease-out, box-shadow 180ms ease-out',
-  '&:focus-within': { borderColor: 'rgba(0, 255, 179, .65)', boxShadow: '0 6px 24px rgba(0, 0, 0, .22), 0 0 18px rgba(0, 255, 179, .08)' },
-  '&::after': { content: '""', position: 'absolute', pointerEvents: 'none', inset: 0, borderRadius: 'inherit', background: 'linear-gradient(90deg, #00FFB3, #00b8bd) top / 100% 1px no-repeat', opacity: .45 },
+  border: 'none',
+  transition: 'box-shadow 180ms ease-out',
+  '&:focus-within': { boxShadow: '0 6px 24px rgba(0, 0, 0, .22), 0 0 18px rgba(0, 255, 179, .08)' },
   '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
-  '@media (forced-colors: active)': { borderColor: 'CanvasText', boxShadow: 'none', '&::after': { display: 'none' }, '&:focus-within': { borderColor: 'Highlight', boxShadow: 'none' } },
+  '@media (forced-colors: active)': { border: '1px solid CanvasText', boxShadow: 'none', '&:focus-within': { borderColor: 'Highlight', boxShadow: 'none' } },
   // hack: eats the bottom of the last message (as it has a 1px divider)
   // NOTE: commented on 2024-05-13, as other content was stepping on the border due to it and missing zIndex
   // mt: '-1px',

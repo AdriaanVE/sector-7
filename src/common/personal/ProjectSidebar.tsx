@@ -33,15 +33,18 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
     setEditorSession(session => session + 1);
     setEditingId(projectId);
   };
-  const closeEditor = () => {
+  const closeEditor = (restoreFocus = true) => {
     setEditingId(null);
     const opener = returnFocus.current;
-    requestAnimationFrame(() => { if (opener?.isConnected) opener.focus(); });
+    if (restoreFocus) requestAnimationFrame(() => { if (opener?.isConnected) opener.focus(); });
   };
   const editing: DFolder | undefined = editingId === '' ? { id: '', title: 'New project', instructions: '', connectedFolders: [], fileIds: [], conversationIds: [], revision: 0 } : folders.find(project => project.id === editingId);
-  const newChat = (project: DFolder) => {
+  const newChat = (projectId: string) => {
     const chat = useChatStore.getState().prependNewConversation(undefined, false);
-    useFolderStore.getState().addConversationToFolder(project.id, chat); onActivate(chat);
+    useFolderStore.getState().addConversationToFolder(projectId, chat);
+    setExpanded(state => ({ ...state, [projectId]: true }));
+    onActivate(chat);
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[aria-label="New Message"] textarea')?.focus());
   };
   const removeProject = (projectId: string) => {
     useFolderStore.getState().deleteFolder(projectId);
@@ -99,7 +102,7 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
                 {!project.connectedFolders?.length && <Typography level='body-sm' sx={{ px: 1.25, py: 0.5, color: 'text.tertiary' }}>No source folders</Typography>}
               </Box>
               <MenuItem onClick={() => openEditor(project.id)}>Edit project</MenuItem>
-              <MenuItem onClick={() => newChat(project)}>New chat in project</MenuItem>
+              <MenuItem onClick={() => newChat(project.id)}>New chat in project</MenuItem>
               <MenuItem disabled={!index} onClick={() => useFolderStore.getState().moveFolder(index, index - 1)}>Move up</MenuItem>
               <MenuItem disabled={index === folders.length - 1} onClick={() => useFolderStore.getState().moveFolder(index, index + 1)}>Move down</MenuItem>
               <MenuItem color='danger' onClick={() => removeProject(project.id)}>Remove local project</MenuItem>
@@ -109,12 +112,12 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
         {expanded[project.id] && <Box sx={{ ml: { xs: '40px', sm: '32px' }, pl: 0.25, display: 'grid', gap: 0.25, minWidth: 0 }}>
           {projectChats.filter(chat => !chat.isArchived).map(chat => <Button className='sector7-nav-control' size='sm' key={chat.id} variant='plain' color='neutral' aria-current={activeConversationId === chat.id ? 'page' : undefined} onClick={() => onActivate(chat.id)} sx={{ overflow: 'hidden', gap: 1, bgcolor: activeConversationId === chat.id ? 'rgba(180, 198, 209, .08)' : undefined }}><Box component='span' sx={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chat.userTitle || chat.autoTitle || 'New chat'}</Box><ChatAttentionIndicator id={chat.id} isCurrent={activeConversationId === chat.id} /></Button>)}
           {!projectChats.some(chat => !chat.isArchived) && <Typography level='body-xs' sx={{ px: 1, py: 0.5, color: 'text.tertiary' }}>No chats yet</Typography>}
-          <Button className='sector7-nav-control' size='sm' variant='plain' color='neutral' startDecorator={<AddIcon sx={{ fontSize: 16 }} />} onClick={() => newChat(project)}>New chat</Button>
+          <Button className='sector7-nav-control' size='sm' variant='plain' color='neutral' startDecorator={<AddIcon sx={{ fontSize: 16 }} />} onClick={() => newChat(project.id)}>New chat</Button>
         </Box>}
       </Box>;
     })}
     {error && <Alert size='sm' color='danger'>{error}</Alert>}
-    {editing && <ProjectEditor key={editorSession} project={editing} files={files} onClose={closeEditor} onRemove={() => { removeProject(editing.id); closeEditor(); }} onSaved={removedContext => { closeEditor(); void (removedContext ? gcProjectCache() : flushDisk()).catch(error => setError(error instanceof Error ? error.message : 'Could not save project.')); }} />}
+    {editing && <ProjectEditor key={editorSession} project={editing} files={files} onClose={() => closeEditor()} onRemove={() => { removeProject(editing.id); closeEditor(); }} onSaved={(projectId, created, removedContext) => { closeEditor(!created); if (created) newChat(projectId); void (removedContext ? gcProjectCache() : flushDisk()).catch(error => setError(error instanceof Error ? error.message : 'Could not save project.')); }} />}
   </Box>;
 }
 
@@ -123,7 +126,7 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
   files: Record<string, ProjectFile>;
   onClose: () => void;
   onRemove: () => void;
-  onSaved: (removedContext: boolean) => void;
+  onSaved: (projectId: string, created: boolean, removedContext: boolean) => void;
 }) {
   const [title, setTitle] = React.useState(project.title);
   const [instructions, setInstructions] = React.useState(project.instructions);
@@ -174,10 +177,10 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
     // Keep context added elsewhere while this editor was open; remove only selected original entries.
     const removed = originalFileIds.current.filter(id => !fileIds.includes(id));
     store.updateProject(current.id, { instructions, connectedFolders: folders, fileIds: current.fileIds.filter(id => !removed.includes(id)) });
-    onSaved(removed.length > 0);
+    onSaved(current.id, !project.id, removed.length > 0);
   };
   const removeFiles = (ids: string[]) => setFileIds(current => current.filter(id => !ids.includes(id)));
-  return <Modal open onClose={onClose} sx={{ zIndex: themeZIndexOverMobileDrawer }}>
+  return <Modal open disableRestoreFocus onClose={onClose} sx={{ zIndex: themeZIndexOverMobileDrawer }}>
     <ModalDialog aria-labelledby='sector7-project-editor-title' sx={{ width: 'min(600px, calc(100vw - 24px))', maxHeight: 'calc(100dvh - 32px)', overflow: 'auto', p: { xs: 2, sm: 3 }, gap: 2.5, borderRadius: 'xl' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         <Typography id='sector7-project-editor-title' level='h3'>{project.id ? 'Edit project' : 'New project'}</Typography>
