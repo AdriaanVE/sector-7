@@ -1,3 +1,5 @@
+import { WORKSPACE_BYTE_LIMIT } from '~/server/local/workspace-archive';
+import { readBoundedJSON } from '~/server/local/request-body';
 import { failure } from '~/server/local/route-error';
 import { NextResponse } from 'next/server';
 import { loadWorkspace, commitWorkspace, workspaceRecoveryRevision } from '~/server/local/workspace';
@@ -9,7 +11,7 @@ export async function GET(request: Request) {
 }
 export async function PUT(request: Request) {
   try {
-    const { workspace, expectedRevision, expectedEpoch } = await request.json();
+    const { workspace, expectedRevision, expectedEpoch } = await readBoundedJSON(request, WORKSPACE_BYTE_LIMIT + 1024 * 1024);
     return NextResponse.json({ workspace: await commitWorkspace(workspace, expectedRevision, undefined, expectedEpoch) });
   } catch (error) { return failure(error); }
 }

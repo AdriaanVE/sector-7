@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useChatStore, getConversation } from '~/common/stores/chat/store-chats';
 import { create_FunctionCallResponse_ContentFragment } from '~/common/stores/chat/chat.fragments';
-import { flushDisk } from './disk-storage';
+import { assertDiskCurrent, flushDisk } from './disk-storage';
 import { hasChatRun } from './chat-run';
 
 type QuestionOperation = 'saving' | 'continuing';
@@ -18,6 +18,7 @@ function end(conversationId: string) {
 export function questionAnswerKey(invocationId: string, questionId: string) { return JSON.stringify([invocationId, questionId]); }
 
 export async function answerQuestions(conversationId: string, answers: Record<string, string>, dismissed = false) {
+  assertDiskCurrent();
   if (hasChatRun(conversationId) || getConversation(conversationId)?._abortController || !begin(conversationId, 'saving')) return false;
   const chat = getConversation(conversationId);
   const pending = chat?.pendingQuestions?.filter(question => !question.answered) ?? [];
@@ -52,6 +53,7 @@ export async function answerQuestions(conversationId: string, answers: Record<st
 }
 
 export async function continueQuestions(conversationId: string, generate: () => Promise<boolean>): Promise<boolean> {
+  assertDiskCurrent();
   if (!begin(conversationId, 'continuing')) return false;
   try {
     const chat = getConversation(conversationId);
@@ -61,11 +63,13 @@ export async function continueQuestions(conversationId: string, generate: () => 
 }
 
 export function assertNoPendingQuestion(conversationId: string) {
+  assertDiskCurrent();
   if (hasChatRun(conversationId) || getConversation(conversationId)?._abortController) throw new Error('Wait for the running chat and local tools to finish before editing, retrying, branching or changing model.');
   if (questionOperation(conversationId) || getConversation(conversationId)?.pendingQuestions?.some(question => !question.answered))
     throw new Error('Wait for the answer save, or answer or dismiss the pending question before editing, retrying, branching or changing model.');
 }
 export function assertQuestionGeneration(conversationId: string, continuation = false) {
+  assertDiskCurrent();
   if (hasChatRun(conversationId) || getConversation(conversationId)?._abortController) throw new Error('Wait for the running chat and local tools to finish before sending again.');
   const operation = questionOperation(conversationId);
   const pending = getConversation(conversationId)?.pendingQuestions;

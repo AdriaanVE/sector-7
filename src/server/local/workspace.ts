@@ -1,7 +1,9 @@
 import { open, mkdir, readFile, rename, stat, copyFile, readdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
+import { zipSync, strToU8, strFromU8 } from 'fflate';
+import { Readable } from 'node:stream';
+import { WORKSPACE_BYTE_LIMIT, backupSizeError, decodeBackup, storedBackupSize } from './workspace-archive';
 import { emptyWorkspace, safeId, validateWorkspace, workspaceAssetIds, Workspace } from '~/common/personal/workspace-schema';
 import { withWorkspaceLock, WorkspaceLockBusyError } from './workspace-lock';
 
@@ -81,9 +83,11 @@ export async function writeAsset(id: string, bytes: Uint8Array, directory = data
 /** Caller owns the directory lock, or writes into private restore staging. */
 async function writeAssetUnlocked(id: string, bytes: Uint8Array, directory: string) {
   safeId.parse(id);
+  if (bytes.length > WORKSPACE_BYTE_LIMIT) throw new WorkspaceError('Asset exceeds the 250 MB limit.', 413);
   await mkdir(join(directory, 'assets'), { recursive: true });
   const path = join(directory, 'assets', id);
   try {
+    if ((await stat(path)).size !== bytes.length) throw new WorkspaceError('Asset IDs are immutable. Upload a new version with a new ID.');
     const existing = await readFile(path);
     if (!existing.equals(Buffer.from(bytes))) throw new WorkspaceError('Asset IDs are immutable. Upload a new version with a new ID.');
     return;
@@ -92,7 +96,17 @@ async function writeAssetUnlocked(id: string, bytes: Uint8Array, directory: stri
 }
 
 export async function readAsset(id: string, directory = dataDirectory()) {
-  safeId.parse(id); return exclusive(directory, () => readFile(join(directory, 'assets', id)));
+  safeId.parse(id);
+  return exclusive(directory, async () => {
+    const file = await open(join(directory, 'assets', id), 'r');
+    try {
+      const size = (await file.stat()).size;
+      if (size > WORKSPACE_BYTE_LIMIT) throw new WorkspaceError('Asset exceeds the 250 MB limit.', 413);
+      // The open descriptor remains valid if collection unlinks this immutable asset.
+      if (!size) { await file.close(); return new ReadableStream<Uint8Array>({ start(controller) { controller.close(); } }); }
+      return Readable.toWeb(file.createReadStream({ end: size - 1 }), { strategy: { highWaterMark: 64 * 1024, size: chunk => chunk.byteLength } }) as ReadableStream<Uint8Array>;
+    } catch (error) { await file.close(); throw error; }
+  });
 }
 
 export async function recoverWorkspace(directory = dataDirectory()) {
@@ -118,21 +132,19 @@ export async function backupWorkspace(directory = dataDirectory()) {
     workspace.assets = Object.fromEntries(Object.entries(workspace.assets).filter(([id]) => owned.has(id)));
     await verifyAssets(workspace, directory);
     const files: Record<string, Uint8Array> = { 'workspace.json': strToU8(JSON.stringify(workspace)) };
+    const sizes = [{ name: 'workspace.json', size: files['workspace.json'].length }, ...Object.entries(workspace.assets).map(([id, asset]) => ({ name: `assets/${id}`, size: asset.size }))];
+    const expectedSize = storedBackupSize(sizes);
     for (const id of Object.keys(workspace.assets)) files[`assets/${id}`] = await readFile(join(directory, 'assets', id));
-    return zipSync(files);
+    // Stored ZIP output has exact bounded overhead, avoiding temporary compressed copies.
+    const backup = zipSync(files, { level: 0 });
+    if (backup.length !== expectedSize || backup.length > WORKSPACE_BYTE_LIMIT) throw backupSizeError();
+    return backup;
   });
 }
 
 /** Validated staging is complete before any active manifest is replaced. A corrupt primary is preserved. */
 export async function restoreWorkspace(bytes: Uint8Array, expectedRevision: number | null, directory = dataDirectory(), expectedEpoch?: string) {
-  if (bytes.length > 250 * 1024 * 1024) throw new WorkspaceError('Backup exceeds the 250 MB limit.', 413);
-  let expanded = 0;
-  const files = unzipSync(bytes, { filter: entry => {
-    if (entry.name !== 'workspace.json' && !/^assets\/[a-zA-Z0-9_-]{1,128}$/.test(entry.name)) throw new WorkspaceError('Backup contains an unexpected path.', 422);
-    expanded += entry.originalSize;
-    if (expanded > 250 * 1024 * 1024) throw new WorkspaceError('Expanded backup exceeds the 250 MB limit.', 413);
-    return true;
-  } });
+  const files = decodeBackup(bytes);
   if (!files['workspace.json']) throw new WorkspaceError('Backup is missing workspace.json.', 422);
   const workspace = validateWorkspace(JSON.parse(strFromU8(files['workspace.json'])));
   const owned = workspaceAssetIds(workspace);
