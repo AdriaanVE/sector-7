@@ -1,6 +1,6 @@
 import { ChatActivityLine } from '~/common/personal/ChatActivityLine';
 import { usePersonalSettings } from '~/common/personal/store-personal-settings';
-import { hasVisibleAnswer, toolDisplayFragments } from '~/common/personal/tool-display';
+import { completedToolSummary, hasVisibleAnswer, toolDisplayFragments } from '~/common/personal/tool-display';
 import { assertNoPendingQuestion } from '~/common/personal/questions';
 import { TurnNavigator } from '~/common/personal/TurnNavigator';
 import { QuestionCard } from '~/common/personal/QuestionCard';
@@ -442,7 +442,7 @@ export function ChatMessageList(props: {
       </Box>
     );
 
-  const visibleMessages = showToolCalls || props.isMessageSelectionMode ? filteredMessages : filteredMessages.filter(message => message.role !== 'assistant' || message.generator?.upstreamHandle || messageWasOutOfTokens(message.generator) || hasVisibleAnswer(toolDisplayFragments(message.fragments, false, activityOpId === message.id)));
+  const visibleMessages = showToolCalls || props.isMessageSelectionMode ? filteredMessages : filteredMessages.filter(message => message.role !== 'assistant' || message.generator?.upstreamHandle || messageWasOutOfTokens(message.generator) || hasVisibleAnswer(toolDisplayFragments(message.fragments, false, activityOpId === message.id)) || !!completedToolSummary(message.fragments, false, !!message.pendingIncomplete || activityOpId === message.id, message.generator?.nativeHistory));
 
   return (
     <List role='chat-messages-list' sx={listSx} onCopy={clipboardInterceptCtrlCForCleanup}>

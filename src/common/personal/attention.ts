@@ -22,6 +22,7 @@ export function attentionLabel(attention: Attention, working?: Phase | null): st
 }
 export function canMarkSeen(endVisible: boolean, documentVisible: boolean, focused: boolean) { return endVisible && documentVisible && focused; }
 export function questionInvocations(message: DMessage, model: string): PendingQuestion[] {
+  if (message.pendingIncomplete || ['client-abort', 'issue', 'filter'].includes(message.generator?.tokenStopReason ?? '')) return [];
   const answered = new Set(message.fragments.filter(isContentFragment).filter(fragment => isToolResponsePart(fragment.part)).map(fragment => 'id' in fragment.part ? fragment.part.id : ''));
   return message.fragments.filter(isContentFragment).flatMap(fragment => {
     if (!isToolInvocationPart(fragment.part) || fragment.part.invocation.type !== 'function_call' || fragment.part.invocation.name !== 'ask_user_question' || answered.has(fragment.part.id)) return [];

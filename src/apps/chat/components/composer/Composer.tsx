@@ -7,7 +7,8 @@ import { usePersonalSettings } from '~/common/personal/store-personal-settings';
 import { SkillSelectionScope } from '~/common/personal/skill-selection';
 import { localJSON } from '~/common/personal/disk-storage';
 import { skillSnapshotSchema, skillOriginForModel, type SkillSnapshot } from '~/common/personal/skills';
-import { answerQuestions, assertQuestionGeneration, continueQuestions, questionAnswerKey, questionOperation } from '~/common/personal/questions';
+import { assertQuestionGeneration, questionOperation } from '~/common/personal/questions';
+import { sendComposerQuestionAnswer } from '~/common/personal/question-composer';
 import { getConversation } from '~/common/stores/chat/store-chats';
 import { runPersonaOnConversationHead } from '../../editors/chat-persona';
 import * as React from 'react';
@@ -339,9 +340,16 @@ export function Composer(props: {
     if (questionOperation(targetConversationId)) return false;
     const pendingChat = getConversation(targetConversationId);
     if (pendingChat?.pendingQuestions?.length) {
-      const answers = Object.fromEntries(pendingChat.pendingQuestions.flatMap(question => question.questions.map(item => [questionAnswerKey(question.invocationId, item.id), composerText])));
-      if (pendingChat.pendingQuestions.every(question => question.answered) || await answerQuestions(targetConversationId, answers)) { _handleClearText(); return await continueQuestions(targetConversationId, () => runPersonaOnConversationHead(pendingChat.chatConfig.llmId, targetConversationId, true)); }
-      return false;
+      try {
+        return await sendComposerQuestionAnswer(targetConversationId, {
+          mode: _chatExecuteMode, text: composerText,
+          hasContext: !!(attachmentDrafts.length || pendingParts?.length || selectedSkills.length || inReferenceTo?.length || composerTextSuffix),
+        }, () => setComposeText(current => current === composerText ? '' : current),
+        () => runPersonaOnConversationHead(pendingChat.chatConfig.llmId, targetConversationId, true)) ?? false;
+      } catch (error) {
+        addSnackbar({ key: 'question-answer', message: error instanceof Error ? error.message : 'Your answer could not be saved. Try again.', type: 'issue' });
+        return false;
+      }
     }
     try { assertQuestionGeneration(targetConversationId); }
     catch (error) { addSnackbar({ key: 'chat-running', message: error instanceof Error ? error.message : 'Wait for the running chat to finish.', type: 'info' }); return false; }
@@ -392,7 +400,7 @@ export function Composer(props: {
     const enqueued = onAction(targetConversationId, _chatExecuteMode, fragments, metadata);
     if (enqueued) { skillSelectionScope.clear(); setSelectedSkills([]); _handleClearText(); }
     return enqueued;
-  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments, attachmentDrafts, pendingParts, selectedSkills, skillSelectionScope]);
+  }, [targetConversationId, confirmProceedIfAttachmentsNotSupported, composerTextSuffix, props.capabilityHasT2IEdit, inReferenceTo, onAction, _handleClearText, attachmentsTakeAllFragments, attachmentDrafts, pendingParts, selectedSkills, skillSelectionScope, setComposeText]);
 
   const handleSendAction = React.useCallback(async (chatExecuteMode: ChatExecuteMode, composerText: string): Promise<boolean> => {
     if (sendInFlight.current) return false;

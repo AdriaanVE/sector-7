@@ -30,6 +30,6 @@ export function QuestionCard({ conversationId }: { conversationId: string }) {
     </Box>))}
     {error && <Alert color='danger'>{error}</Alert>}
     <Box sx={{ display: 'flex', gap: 1 }}><Button loading={busy} onClick={() => void continueChat()}>{answerSaved ? 'Continue' : 'Send answers'}</Button>
-      <Button variant='plain' disabled={busy} onClick={() => { void answerQuestions(conversationId, {}, true).catch(error => setError(error.message)); }}>Dismiss</Button></Box>
+      {!answerSaved && <Button variant='plain' disabled={busy} onClick={() => { setError(''); void answerQuestions(conversationId, {}, true).catch(error => setError(error instanceof Error ? error.message : 'Question could not be dismissed.')); }}>Dismiss</Button>}</Box>
   </Box>;
 }

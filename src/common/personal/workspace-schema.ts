@@ -4,6 +4,8 @@ import { nativeHistorySchema } from './native-history';
 import * as z from 'zod/v4';
 import { CHAT_MODELS, normalizeChatConfig } from './chat-config';
 import { questionSchema } from './attention';
+import { normalizeQuestionHistory } from './question-history';
+import type { DConversation } from '~/common/stores/chat/chat.conversation';
 
 export const safeId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 export const STORE_NAMES = ['app-chats', 'app-folders', 'app-project-files', 'app-personal-settings', 'app-personal-ui', 'app-app-chat', 'app-ui', 'app-app-chat-panes-2'] as const;
@@ -153,6 +155,8 @@ export function validateWorkspace(value: unknown): Workspace {
       uniqueIds(chats, 'chat');
       for (const chat of chats) {
         uniqueIds(chat.messages, 'message');
+        // Validate actionable question identity before committing or entering browser hydration.
+        normalizeQuestionHistory(chat as unknown as DConversation);
         for (const q of chat.pendingQuestions ?? []) {
           const m = chat.messages.find(m => m.id === q.messageId);
           const call = m?.fragments.find(f => f.part.pt === 'tool_invocation' && f.part.id === q.invocationId);

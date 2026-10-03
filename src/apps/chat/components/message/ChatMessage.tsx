@@ -1,5 +1,6 @@
 import { usePersonalSettings } from '~/common/personal/store-personal-settings';
 import { toolDisplayFragments } from '~/common/personal/tool-display';
+import { ChatToolSummary } from '~/common/personal/ChatToolSummary';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { shallow } from 'zustand/vanilla/shallow';
@@ -1038,6 +1039,10 @@ export function ChatMessage(props: {
               onFragmentDelete={!onMessageFragmentDelete ? undefined : handleFragmentDelete}
               onFragmentReplace={!onMessageFragmentReplace ? undefined : handleFragmentReplace}
             />
+          )}
+
+          {fromAssistant && !isEditingText && (
+            <ChatToolSummary fragments={messageFragments} nativeHistory={messageGenerator?.nativeHistory} showAll={showToolCalls} pending={!!messagePendingIncomplete || !!props.hideActivityPlaceholder} />
           )}
 
           {/* Interleaved Fragments (reasoning + content in temporal order) */}

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { create_FunctionCallInvocation_ContentFragment, create_FunctionCallResponse_ContentFragment, createTextContentFragment, createPlaceholderVoidFragment } from '~/common/stores/chat/chat.fragments';
 import { emptyWorkspace, validateWorkspace } from './workspace-schema';
-import { hasVisibleAnswer, toolActivityLabel, toolDisplayFragments } from './tool-display';
+import { completedToolSummary, hasVisibleAnswer, toolActivityLabel, toolDisplayFragments } from './tool-display';
 
 test('tool display hides details without changing replay history, answers or resources', () => {
   const fragments = [create_FunctionCallInvocation_ContentFragment('call', 'folder_read', '{"path":"README.md"}'), create_FunctionCallResponse_ContentFragment('call', false, 'folder_read', '{"text":"private output"}', 'client'), createTextContentFragment('Answer with a source link.')];
@@ -115,4 +115,119 @@ test('native activity shows search queries and fetch URLs, preserving the curren
   assert.equal(toolActivityLabel([progress], 'Searching', { toolId: 'missing' }), 'Searching');
   assert.equal(toolActivityLabel([call('fetch', 'web_fetch', { url: 'https://example.com/api?secret=123' })], 'Searching'), 'Fetching https://example.com/api');
   assert.equal(toolActivityLabel([call('fetch', 'web_fetch', { url: 'javascript:secret' })], 'Searching'), 'Fetching a web page');
+});
+
+
+const response = (id: string, name: string, result: Record<string, unknown> = {}, error: boolean | string = false) => create_FunctionCallResponse_ContentFragment(id, error, name, JSON.stringify(result), 'client');
+
+test('completed summary deduplicates recorded activities and never exposes tool inputs or results', () => {
+  const fragments = [
+    call('read', 'folder_read', { path: '/secret/private-file', token: 'secret-token' }),
+    response('read', 'folder_read', { text: 'private output' }), response('read2', 'folder_read'),
+    response('command', 'local_command', { status: 'succeeded', chunks: [{ text: 'private output' }] }),
+    response('web', 'web_search'), response('web2', 'web_search'),
+    createTextContentFragment('I also generated an image and deleted files.'),
+  ];
+  const before = JSON.stringify(fragments);
+  assert.equal(completedToolSummary(fragments), 'Read files, ran commands, searched the web');
+  assert.equal(JSON.stringify(fragments), before);
+  assert.equal(completedToolSummary(fragments, true), null);
+  assert.equal(completedToolSummary(fragments, false, true), null);
+  assert.equal(completedToolSummary([]), null);
+  assert.equal(completedToolSummary([fragments[6]]), null);
+  assert.equal(completedToolSummary([call('question', 'ask_user_question', {}), response('question', 'ask_user_question')]), null);
+});
+
+test('completed summary distinguishes failure, cancellation and unconfirmed invocations', () => {
+  assert.equal(completedToolSummary([call('read', 'folder_read', {})]), 'File reads incomplete');
+  assert.equal(completedToolSummary([response('read', 'folder_read', {}, 'Sensitive failure text')]), 'File reads failed');
+  assert.equal(completedToolSummary([response('command', 'local_command', { status: 'failed', exitCode: 1 })]), 'Commands failed');
+  assert.equal(completedToolSummary([response('command', 'local_command', { status: 'cancelled' })]), 'Commands stopped');
+  assert.equal(completedToolSummary([response('command', 'local_command', { error: 'aborted', stopped: true }, 'aborted')]), 'Commands stopped');
+  for (const status of ['running', undefined]) assert.equal(completedToolSummary([response('command', 'local_command', { status })]), 'Commands incomplete');
+  for (const status of ['timed_out', 'output_limit']) assert.equal(completedToolSummary([response('command', 'local_command', { status })]), 'Commands failed');
+  const invocation = call('read', 'folder_read', {});
+  const result = response('read', 'folder_read');
+  assert.equal(completedToolSummary([invocation, result]), 'Read files');
+  assert.equal(completedToolSummary([result, invocation]), 'Read files');
+  assert.equal(completedToolSummary([result, response('other', 'folder_read', {}, true)]), 'Read files, file reads failed');
+});
+
+test('completed summary supports native logs, including fetches and interrupted work', () => {
+  const fragments = [createPlaceholderVoidFragment('Working', undefined, undefined, [
+    { opId: 'search', mot: 'search-web', text: 'Search completed: 2 results', state: 'done', iTexts: ['private query'], level: 0, cts: 1 },
+    { opId: 'fetch', mot: 'search-web', text: 'Retrieved https://private.example/secret', state: 'done', iTexts: ['https://private.example/secret'], level: 0, cts: 1 },
+    { opId: 'fetch2', mot: 'search-web', text: 'Fetch error: unavailable', state: 'error', level: 0, cts: 1 },
+    { opId: 'code', mot: 'code-exec', text: 'Code executed', state: 'done', oTexts: ['private result'], level: 0, cts: 1 },
+    { opId: 'bash', mot: 'code-exec', text: 'Bash executed', state: 'done', level: 0, cts: 1 },
+    { opId: 'stop', mot: 'search-web', text: 'Searching', state: 'error', oTexts: ['Terminated with reason: done-client-aborted'], level: 0, cts: 1 },
+    { opId: 'pending', mot: 'code-exec', text: 'Executing code...', state: 'active', level: 0, cts: 1 },
+  ])];
+  const before = JSON.stringify(fragments);
+  assert.equal(completedToolSummary(fragments), 'Searched the web, fetched web pages, web fetch failed, ran code, ran commands, web search stopped, code execution incomplete');
+  assert.equal(JSON.stringify(fragments), before);
+});
+
+test('completed summary covers local operations and treats unknown tools generically', () => {
+  const names = ['folder_list', 'folder_search', 'folder_write', 'folder_edit', 'folder_move', 'folder_delete', 'web_fetch', 'code_execution', 'secret_tool_name'];
+  assert.equal(completedToolSummary(names.map(name => response(name, name))), 'Listed files, searched files, updated files, moved files, deleted files, fetched web pages, ran code, used tools');
+  const logs = createPlaceholderVoidFragment('Working', undefined, undefined, [
+    { opId: 'view', mot: 'code-exec', text: 'Viewed file', state: 'done', level: 0, cts: 1 },
+    { opId: 'edit', mot: 'code-exec', text: 'Edit applied', state: 'done', level: 0, cts: 1 },
+    { opId: 'unknown', mot: 'code-exec', text: 'Using secret_tool_name...', state: 'done', level: 0, cts: 1 },
+    { opId: 'image', mot: 'gen-image', text: 'Finished', state: 'done', level: 0, cts: 1 },
+  ]);
+  assert.equal(completedToolSummary([logs]), 'Read files, updated files, used tools, generated images');
+});
+
+
+for (const streaming of [true, false]) test(`native ${streaming ? 'SSE' : 'JSON'} summary survives clean parser completion without progress placeholders`, async () => {
+  const { ContentReassembler } = await import('~/modules/aix/client/ContentReassembler');
+  const { ChatGenerateTransmitter } = await import('~/modules/aix/server/dispatch/chatGenerate/ChatGenerateTransmitter');
+  const { createAnthropicMessageParser, createAnthropicMessageParserNS } = await import('~/modules/aix/server/dispatch/chatGenerate/parsers/anthropic.parser');
+  const content = [
+    { type: 'server_tool_use', id: 'search', name: 'web_search', input: { query: 'secret query' } },
+    { type: 'web_search_tool_result', tool_use_id: 'search', content: [{ type: 'web_search_result', title: 'Secret', url: 'https://example.com/secret', encrypted_content: 'unchanged-encrypted' }] },
+    { type: 'server_tool_use', id: 'fetch', name: 'web_fetch', input: { url: 'https://example.com/private' } },
+    { type: 'web_fetch_tool_result', tool_use_id: 'fetch', content: { type: 'web_fetch_tool_result_error', error_code: 'unavailable' } },
+    { type: 'text', text: 'Answer' },
+  ];
+  const pt = new ChatGenerateTransmitter('Anthropic');
+  const model = 'claude-sonnet-5-5';
+  if (streaming) {
+    const parse = createAnthropicMessageParser({ deployment: 'test', model, requestPrefix: 'preserved' });
+    parse(pt, JSON.stringify({ type: 'message_start', message: { id: 'native', type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 0 } } }), 'message_start');
+    for (const [index, block] of content.entries()) {
+      parse(pt, JSON.stringify({ type: 'content_block_start', index, content_block: block }), 'content_block_start');
+      parse(pt, JSON.stringify({ type: 'content_block_stop', index }), 'content_block_stop');
+    }
+    parse(pt, JSON.stringify({ type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 5 } }), 'message_delta');
+    parse(pt, JSON.stringify({ type: 'message_stop' }), 'message_stop');
+  } else createAnthropicMessageParserNS({ deployment: 'test', model, requestPrefix: 'preserved' })(pt, JSON.stringify({ id: 'native', type: 'message', role: 'assistant', model, content, stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 5 } }));
+  const reassembler = new ContentReassembler({ mgt: 'aix', name: model, aix: { mId: model, vId: 'anthropic' } }, undefined, undefined, []);
+  if (!pt.isEnded) pt.setDialectEnded('done-dialect');
+  for (const particle of pt.flushParticles()) reassembler.enqueueWireParticle(particle);
+  await reassembler.waitForWireComplete();
+  const result = reassembler.finalizeReassembly();
+  assert.equal(result.fragments.some(fragment => fragment.ft !== '_ft_sentinel' && fragment.part.pt === 'ph'), false);
+  const before = JSON.stringify(result.generator.nativeHistory);
+  assert.equal(completedToolSummary(result.fragments, false, false, result.generator.nativeHistory), 'Searched the web, web fetch failed');
+  assert.equal(JSON.stringify(result.generator.nativeHistory), before);
+  assert.deepEqual(result.generator.nativeHistory?.segments[0].content, content);
+  const history = result.generator.nativeHistory!;
+  const continued = { ...history, segments: [...history.segments, { id: 'continuation', content: [
+    { type: 'server_tool_use', id: 'bash', name: 'bash_code_execution', input: { command: 'secret command' } },
+    { type: 'bash_code_execution_tool_result', tool_use_id: 'bash', content: { type: 'bash_code_execution_result', return_code: 1, stdout: '', stderr: '' } },
+    { type: 'server_tool_use', id: 'pending', name: 'web_fetch', input: { url: 'https://example.com/private' } },
+  ] }] };
+  assert.equal(completedToolSummary(result.fragments, false, false, continued), 'Searched the web, web fetch failed, commands failed, web fetch incomplete');
+});
+
+test('native in-progress labels retain command, code and editor categories after stopping', () => {
+  const logs = createPlaceholderVoidFragment('Stopped', undefined, undefined, [
+    { opId: 'bash', mot: 'code-exec', text: 'Running bash', state: 'error', oTexts: ['Terminated with reason: done-client-aborted'], level: 0, cts: 1 },
+    { opId: 'code', mot: 'code-exec', text: 'Running code', state: 'error', oTexts: ['Terminated with reason: done-client-aborted'], level: 0, cts: 1 },
+    { opId: 'editor', mot: 'code-exec', text: 'Editor error', state: 'error', level: 0, cts: 1 },
+  ]);
+  assert.equal(completedToolSummary([logs]), 'Commands stopped, code execution stopped, file updates failed');
 });
