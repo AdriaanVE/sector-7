@@ -1,3 +1,4 @@
+import { artifactReferenceSchema } from './artifact-schema';
 import { connectedFolderSchema } from './folder-tools';
 import { skillSnapshotSchema } from './skills';
 import { nativeHistorySchema } from './native-history';
@@ -45,7 +46,7 @@ const part = z.discriminatedUnion('pt', [
   z.object({ pt: z.literal('ph'), pText: z.string(), opLog: z.array(z.object({ opId: z.string(), mot: z.enum(['search-web', 'gen-image', 'code-exec']), text: z.string(), state: z.enum(['active', 'done', 'error']), level: timestamp, cts: timestamp }).passthrough()).optional() }).passthrough(),
   z.object({ pt: z.literal('_pt_sentinel') }).passthrough(),
 ]);
-const fragment = z.object({ ft: z.enum(['content', 'attachment', 'void']), fId: safeId, part }).passthrough();
+const fragment = z.object({ ft: z.enum(['content', 'attachment', 'void']), fId: safeId, part, artifact: artifactReferenceSchema.optional() }).passthrough();
 const projectContext = z.object({ projectId: safeId, instructionRevision: timestamp, files: z.array(z.object({ id: safeId, version: z.string().min(1) })) });
 const generator = z.discriminatedUnion('mgt', [
   z.object({ mgt: z.literal('named'), name: z.string(), nativeHistory: nativeHistorySchema.optional(), projectContext: projectContext.optional() }).passthrough(),
@@ -115,6 +116,8 @@ export function workspaceAssetIds(workspace: Workspace): Set<string> {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) { value.forEach(scan); return; }
     const item = value as Record<string, unknown>;
+    if (['content', 'attachment', 'void'].includes(String(item.ft)) && typeof item.fId === 'string' && item.part && item.artifact)
+      ids.add(artifactReferenceSchema.parse(item.artifact).assetId);
     if (item.reftype === 'dblob') ids.add(safeId.parse(item.dblobAssetId));
     if (item.via === 'anthropic' && typeof item.fileId === 'string') upstreamIds.add(item.fileId);
     Object.values(item).forEach(scan);

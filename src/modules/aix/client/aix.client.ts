@@ -5,7 +5,7 @@ import { ortWebToolsToAixModel } from '~/modules/llms/vendors/openrouter/openrou
 import { vertexLinksAutoResolveFragments } from '~/modules/google/vertexai.client';
 
 import type { MaybePromise } from '~/common/types/useful.types';
-import { AIVndAntInlineFilesPolicy, getVndAntInlineFiles } from '~/common/stores/store-ai';
+import { AIVndAntInlineFilesPolicy } from '~/common/stores/store-ai';
 import { AudioPlayer } from '~/common/util/audio/AudioPlayer';
 import { DLLM, DLLMId, LLM_IF_GEM_Interactions, LLM_IF_HOTFIX_NoTemperature, LLM_IF_OAI_Responses, LLM_IF_Outputs_Audio, LLM_IF_Outputs_Image, LLM_IF_Outputs_NoText } from '~/common/stores/llms/llms.types';
 import { DMessage, DMessageGenerator, createGeneratorAIX_AutoLabel } from '~/common/stores/chat/chat.message';
@@ -32,7 +32,6 @@ import { ReassemblerParticleTransforms, ContentReassembler } from './ContentReas
 import { aixCGR_ChatSequence_FromDMessagesOrThrow, aixCGR_FromSimpleText, aixCGR_SystemMessage_FromDMessageOrThrow, AixChatGenerate_TextMessages, clientHotFixGenerateRequest_ApplyAll } from './aix.client.chatGenerateRequest';
 import { aixClassifyStreamingError } from './aix.client.errors';
 import { aixClientDebuggerGetRBO, getAixDebuggerNoStreaming } from './debugger/memstore-aix-client-debugger';
-import { createClientAnthropicFileInlineTransform } from './aix.client.transform-antFileInline';
 import { withDecimator } from './withDecimator';
 
 
@@ -616,7 +615,7 @@ export async function aixChatGenerateContent_DMessage_orThrow<TServiceSettings e
   aixDecorateModelFromGlobals(aixModel, {
     vndAntContainerId: clientOptions?.antContainerId,
     vndOaiContainerId: clientOptions?.oaiContainerId,
-    vndAntTransformInlineFiles: aixAccess.dialect === 'anthropic' ? getVndAntInlineFiles() : undefined,
+    vndAntTransformInlineFiles: 'off',
     vndGeminiEnvironmentId: clientOptions?.gemEnvironmentId,
   });
 
@@ -937,8 +936,7 @@ async function _aixChatGenerateContent_LL_unlocked(
   // - CSF mode: server-side transforms tagged csfUnsafe are stripped; we add these to re-transform here via tRPC
   // - in tRPC mode the server-side transforms handle everything elegantly - but we still add failsafes in case the server has a transform issue
   const particleTransforms: ReassemblerParticleTransforms[] = [];
-  if (aixAccess.dialect === 'anthropic' && aixModel.vndAntTransformInlineFiles /* && clientSideChatGenerate */)
-    particleTransforms.push(createClientAnthropicFileInlineTransform(aixAccess, aixModel.vndAntTransformInlineFiles));
+  // Hosted-file previews are saved locally by the message UI, never by streaming transforms.
 
 
   // Particles Reassembler - owns the accumulator, reused across Client-side retries

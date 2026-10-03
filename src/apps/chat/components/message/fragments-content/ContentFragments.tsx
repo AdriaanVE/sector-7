@@ -63,6 +63,8 @@ export function ContentFragments(props: {
   messageRole: DMessageRole,
   messagePendingIncomplete?: boolean,
   messageGeneratorLlmId?: string | null,
+  messageDeployment?: string,
+  onArtifactSave?: (fragmentId: DMessageFragmentId, artifact: import('~/common/personal/artifact-schema').ArtifactReference) => () => boolean,
   inFluxFragmentId?: DMessageFragmentId,
   disableMarkdownText: boolean,
   htmlRenderVariant?: AutoBlocksHtmlRenderVariant,
@@ -381,6 +383,9 @@ export function ContentFragments(props: {
             <BlockPartHostedResource
               key={fId}
               hostedResourcePart={part}
+              hostedFragment={fragment}
+              messageDeployment={props.messageDeployment}
+              onArtifactSave={props.onArtifactSave}
               fragmentId={fId}
               messageGeneratorLlmId={props.messageGeneratorLlmId}
               contentScaling={props.contentScaling}

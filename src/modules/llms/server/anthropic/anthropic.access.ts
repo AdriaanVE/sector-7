@@ -18,6 +18,13 @@ import { llmsFixupHost } from '../../shared/llm.isomorphic';
 // configuration
 const DEFAULT_ANTHROPIC_HOST = 'api.anthropic.com';
 
+/** Stable deployment identity without storing endpoint credentials in messages. */
+export async function anthropicDeployment(access: AnthropicAccessSchema) {
+  const endpoint = anthropicAccess(access, ANTHROPIC_API_PATHS.messages).url;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Centralized Anthropic API paths.
  */

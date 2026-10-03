@@ -1,5 +1,8 @@
-import { cachedArtifactBlob, cachedArtifactId, saveArtifact } from '~/common/personal/artifact-cache';
+import { cachedArtifactBlob, legacyCachedArtifact, saveArtifact } from '~/common/personal/artifact-cache';
 import * as React from 'react';
+import type { ArtifactReference } from '~/common/personal/artifact-schema';
+import { flushDisk } from '~/common/personal/disk-storage';
+import { AutoBlocksRenderer } from '~/modules/blocks/AutoBlocksRenderer';
 import TimeAgo from 'react-timeago';
 import { useQuery } from '@tanstack/react-query';
 
@@ -17,7 +20,6 @@ import { extractYoutubeVideoIDFromURL } from '~/modules/youtube/youtube.utils';
 import { geminiFileDelete, geminiFileDownloadBlob, geminiFileErrorIsGone, geminiFileGetMetadata } from '~/modules/llms/vendors/gemini/geminiFiles.client';
 
 import type { ContentScaling } from '~/common/app.theme';
-import { ConfirmationModal } from '~/common/components/modals/ConfirmationModal';
 import { GoodTooltip } from '~/common/components/GoodTooltip';
 import { apiAsync, apiQuery } from '~/common/util/trpc.client';
 import { convert_Base64_To_UInt8Array } from '~/common/util/blobUtils';
@@ -27,9 +29,7 @@ import { downloadBlob } from '~/common/util/downloadUtils';
 import { videoPlayObjectUrl } from '~/common/util/video/videoPlayManaged';
 import { humanReadableBytes } from '~/common/util/textUtils';
 import { guessMimeTypeFromFilename, mimeTypeIsPlainText, mimeTypeIsSupportedImage } from '~/common/attachment-drafts/attachment.mimetypes';
-import { useAIPreferencesStore } from '~/common/stores/store-ai';
 import { useLlmServiceAccess } from '~/common/stores/llms/hooks/useLlmServiceAccess';
-import { useOverlayComponents } from '~/common/layout/overlays/useOverlayComponents';
 
 import { useHostedLinkRegister } from '~/modules/blocks/markdown/HostedLinksContext';
 
@@ -81,31 +81,47 @@ function AnthropicFileChip(props: {
   access: AnthropicAccessSchema,
   fileId: string,
   contentScaling: ContentScaling,
+  expectedDeployment?: string,
+  artifact?: ArtifactReference,
+  onArtifactSave?: (reference: ArtifactReference) => () => boolean,
   onFragmentDelete?: () => void,
-  onFragmentReplace?: (newFragment: DMessageContentFragment) => void,
 }) {
 
   // state
   const [busy, setBusy] = React.useState<HostedFileChipBusy>(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
-  const { showPromisedOverlay } = useOverlayComponents();
+  const [remoteDeleted, setRemoteDeleted] = React.useState(false);
 
   // props
-  const { access, fileId, onFragmentDelete, onFragmentReplace } = props;
+  const { access, fileId, artifact, expectedDeployment, onArtifactSave, onFragmentDelete } = props;
 
   // external state
-  const autoEmbedEnabled = useAIPreferencesStore(state => state.vndAntInlineFiles !== 'off');
   const { data: metadata, isLoading: metaLoading, error: metaError } = apiQuery.llmAnthropic.fileApiGetMetadata.useQuery({ access, fileId }, {
+    enabled: !artifact,
     staleTime: Infinity,
     select: _enrichMetadataWithMimeFlags,
   });
-  const fileName = metadata?.filename || fileId;
-  const selectFileBlob = React.useCallback((response: TDownloadedFile) => _base64ResponseToBlob(response, fileName), [fileName]);
-  const { data: fileContent, refetch: refetchFileContent } = apiQuery.llmAnthropic.fileApiDownload.useQuery({ access, fileId }, {
-    enabled: false, // on-demand only
-    select: selectFileBlob,
+  const fileName = artifact?.fileName || metadata?.filename || fileId;
+  const { refetch: refetchFileContent } = apiQuery.llmAnthropic.fileApiDownload.useQuery({ access, fileId, expectedDeployment }, {
+    enabled: false,
   });
 
+  const ensureOriginal = React.useCallback(async () => {
+    if (!onArtifactSave) throw new Error('This message cannot save a generated file.');
+    if (artifact) {
+      const stillOwned = onArtifactSave(artifact);
+      await flushDisk();
+      if (!stillOwned()) throw new Error('The generated file message changed. Keep the remote original.');
+      const cached = await cachedArtifactBlob(artifact);
+      if (!cached) throw new Error('Saved original is unavailable. Keep the remote file.');
+      return { blob: cached, reference: artifact };
+    }
+    const response = (await refetchFileContent({ cancelRefetch: false, throwOnError: true })).data;
+    if (!response) throw new Error('No file content was returned.');
+    const { blob } = _base64ResponseToBlob(response, fileName);
+    const reference = await saveArtifact({ provider: 'anthropic', deployment: response.deployment, fileId }, fileName, blob, onArtifactSave);
+    return { blob, reference };
+  }, [artifact, refetchFileContent, fileName, fileId, onArtifactSave]);
 
   // derive display info from typed metadata
   const displayName = fileName.length > 40 ? fileName.slice(0, 20) + '...' + fileName.slice(-15) : fileName;
@@ -117,27 +133,24 @@ function AnthropicFileChip(props: {
     setBusy('download');
     setActionError(null);
     try {
-      const cached = await cachedArtifactBlob(fileId);
-      if (cached) { downloadBlob(cached, fileName); return; }
-      const data = fileContent || (await refetchFileContent({ cancelRefetch: false, throwOnError: true })).data;
-      if (data) { await saveArtifact(fileId, fileName, data.blob); downloadBlob(data.blob, fileName); }
+      const { blob } = await ensureOriginal();
+      downloadBlob(blob, fileName);
     } catch (error: any) {
       setActionError(error?.message || 'Download failed');
     } finally {
       setBusy(false);
     }
-  }, [fileContent, refetchFileContent, fileName, fileId]);
+  }, [ensureOriginal, fileName]);
 
   const handleCopy = React.useCallback(async () => {
     setBusy('copy');
     setActionError(null);
     try {
-      const data = fileContent || (await refetchFileContent({ cancelRefetch: false, throwOnError: true })).data;
-      if (!data) return;
-      if (data.mimeIsText)
-        copyToClipboard(await data.blob.text(), fileName);
-      else if (data.mimeIsImage)
-        await copyBlobPromiseToClipboard(data.mimeType, Promise.resolve(data.blob), fileName);
+      const { blob } = await ensureOriginal();
+      if (mimeTypeIsPlainText(blob.type))
+        copyToClipboard(await blob.text(), fileName);
+      else if (mimeTypeIsSupportedImage(blob.type))
+        await copyBlobPromiseToClipboard(blob.type, Promise.resolve(blob), fileName);
       else
         setActionError('Cannot copy this file type');
     } catch (error: any) {
@@ -145,138 +158,71 @@ function AnthropicFileChip(props: {
     } finally {
       setBusy(false);
     }
-  }, [fileContent, refetchFileContent, fileName]);
+  }, [ensureOriginal, fileName]);
 
   const handleDelete = React.useCallback(async () => {
     if (!onFragmentDelete) return;
     setBusy('delete');
     setActionError(null);
     try {
-      // remote deletion
-      await apiAsync.llmAnthropic.fileApiDelete.mutate({ access, fileId });
-      // fragment removal
-      onFragmentDelete();
+      const { reference } = await ensureOriginal();
+      // User-requested remote deletion only after the original is durable.
+      await apiAsync.llmAnthropic.fileApiDelete.mutate({ access, fileId, expectedDeployment: reference.source.deployment });
+      setRemoteDeleted(true);
     } catch (error: any) {
       setActionError(error?.message || 'Delete failed');
     } finally {
       setBusy(false);
     }
-  }, [access, fileId, onFragmentDelete]);
+  }, [access, fileId, onFragmentDelete, ensureOriginal]);
 
 
   const handleInline = React.useCallback(async () => {
-    if (!onFragmentReplace) return;
+    if (!onArtifactSave) return;
     setBusy('inline');
     setActionError(null);
     try {
-      const data = fileContent || (await refetchFileContent({ cancelRefetch: false, throwOnError: true })).data;
-      if (!data) return;
-
-      // text: inline as fenced code block
-      if (data.mimeIsText) {
-        const text = await data.blob.text();
-
-        // fence with adaptive depth (extra backticks if content contains ```)
-        let fence = '```';
-        while (text.includes(fence) && fence.length < 10)
-          fence += '`';
-        onFragmentReplace(createTextContentFragment(`${fence}${fileName}\n${text}\n${fence}\n`));
-      }
-        // image: get dimensions, store in DBlob, and create a Zync asset reference
-        // else if (data.mimeIsImage) {
-        //
-        //   const { width, height } = await imageBlobGetDimensions(data.blob).catch(() => ({ width: 0, height: 0 }));
-        //
-        //   const dblobAssetId = await addDBImageAsset('app-chat', data.blob, {
-        //     label: fileName,
-        //     origin: { ot: 'generated', source: 'ai-text-to-image', generatorName: 'anthropic-code-execution', prompt: '', parameters: {}, generatedAt: new Date().toISOString() },
-        //     metadata: { width, height },
-        //   });
-        //
-        //   onFragmentReplace(createZyncAssetReferenceContentFragment(
-        //     nanoidToUuidV4(dblobAssetId, 'convert-dblob-to-dasset'),
-        //     fileName,
-        //     'image',
-        //     {
-        //       pt: 'image_ref',
-        //       dataRef: createDMessageDataRefDBlob(dblobAssetId, data.mimeType, data.blob.size),
-        //       ...(fileName ? { altText: fileName } : {}),
-        //       ...(width ? { width } : {}),
-        //       ...(height ? { height } : {}),
-        //     },
-        //   ));
-      // }
-      else
-        return setActionError('Cannot inline this file type');
-
-      // fire-and-forget: delete from provider
-      apiAsync.llmAnthropic.fileApiDelete.mutate({ access, fileId }).catch(console.error);
+      const { blob, reference } = await ensureOriginal();
+      if (!mimeTypeIsPlainText(blob.type)) throw new Error('Cannot preview this file type');
+      const text = await blob.text();
+      let fence = '```';
+      while (text.includes(fence) && fence.length < 10) fence += '`';
+      onArtifactSave({ ...reference, previewText: `${fence}${fileName}\n${text}\n${fence}\n` });
+      await flushDisk();
     } catch (error: any) {
-      setActionError(error?.message || 'Inline failed');
+      setActionError(error?.message || 'Preview failed');
     } finally {
       setBusy(false);
     }
-  }, [fileContent, refetchFileContent, access, fileId, fileName, onFragmentReplace]);
+  }, [ensureOriginal, fileName, onArtifactSave]);
 
+  const mime = artifact?.mimeType || metadata?.mime_type || '';
+  const canCopy = mimeTypeIsPlainText(mime) || mimeTypeIsSupportedImage(mime);
+  const canInline = !!onArtifactSave && mimeTypeIsPlainText(mime) && !artifact?.previewText;
 
-  const handleToggleAutoEmbed = React.useCallback(async () => {
-    if (autoEmbedEnabled)
-      return useAIPreferencesStore.getState().setVndAntInlineFiles('off');
-    if (await showPromisedOverlay('chat-message-auto-embed-notice', { rejectWithValue: false }, ({ onResolve, onUserReject }) =>
-      <ConfirmationModal
-        open onClose={onUserReject} onPositive={() => onResolve(true)}
-        noTitleBar
-        lowStakes
-        confirmationText={<>
-          From now on, files generated by Claude tools (code execution, etc.) will be automatically downloaded and embedded into messages, then removed from Anthropic&apos;s File API.
-          <br /><br />
-          You can change this anytime in <b>Settings &gt; Chat AI &gt; Anthropic File Inlining</b>.
-        </>}
-        positiveActionText='Enable & Embed'
-        negativeActionText='Cancel'
-      />,
-    )) {
-      useAIPreferencesStore.getState().setVndAntInlineFiles('inline-file-and-delete');
-      await handleInline();
-    }
-  }, [autoEmbedEnabled, handleInline, showPromisedOverlay]);
-
-
-  const canCopy = !!metadata?.mimeIsText || !!metadata?.mimeIsImage;
-  const canInline = !!onFragmentReplace && !!metadata?.mimeIsText; // for images, replace with ... && canCopy
-
-  const isBusy = !!busy || metaLoading;
+  const isBusy = !!busy || !onArtifactSave || (!artifact && metaLoading);
   const isFileGone = _errorIsNotFound(metaError);
 
 
   return (
-    <HostedFileChip
-      title={cachedArtifactId(fileId) ? `${displayName} - saved locally` : metaLoading ? 'Remote-only: loading...' : isFileGone ? `${fileId} - file no longer available` : displayName}
-      subtitle={metadata && <>{humanReadableBytes(metadata.size_bytes)} · <TimeAgo date={metadata.created_at} /> · {metadata.mime_type}</>}
-      error={actionError || (metaError && !isFileGone ? (metaError.message || 'Could not load file info') : null)}
-      busy={busy}
-      disabled={isBusy}
-      gone={isFileGone && !cachedArtifactId(fileId)}
-      onCopy={canCopy ? handleCopy : undefined}
-      onDownload={handleDownload}
-      onInline={onFragmentReplace ? handleInline : undefined}
-      canInline={canInline}
-      menuExtras={!autoEmbedEnabled && (
-        // Auto-embed toggle - shared global preference
-        <MenuItem disabled={!canInline || isBusy} onClick={handleToggleAutoEmbed}>
-          <ListItemDecorator><Checkbox checked={autoEmbedEnabled} readOnly color='neutral' /></ListItemDecorator>
-          <div>
-            Always embed
-            <Typography level='body-xs' sx={{ opacity: 0.6 }}>
-              Change anytime in Settings
-            </Typography>
-          </div>
-        </MenuItem>
-      )}
-      onDelete={onFragmentDelete ? handleDelete : undefined}
-      deleteFrom='Anthropic'
-      onRemove={onFragmentDelete}
-    />
+    <>
+      <HostedFileChip
+        title={artifact ? `${displayName} - saved locally` : metaLoading ? 'Remote-only: loading...' : isFileGone ? `${fileId} - file no longer available` : displayName}
+        subtitle={metadata && <>{humanReadableBytes(metadata.size_bytes)} · <TimeAgo date={metadata.created_at} /> · {metadata.mime_type}</>}
+        error={actionError || (metaError && !isFileGone ? (metaError.message || 'Could not load file info') : null)}
+        busy={busy}
+        disabled={isBusy}
+        gone={isFileGone && !artifact}
+        onCopy={canCopy ? handleCopy : undefined}
+        onDownload={handleDownload}
+        onInline={onArtifactSave ? handleInline : undefined}
+        canInline={canInline}
+        onDelete={onFragmentDelete && !remoteDeleted && artifact?.source.deployment !== 'legacy-unscoped' ? handleDelete : undefined}
+        deleteFrom='Anthropic'
+        onRemove={onFragmentDelete}
+      />
+      {artifact?.previewText && <AutoBlocksRenderer text={artifact.previewText} fromRole='assistant' contentScaling={props.contentScaling} codeRenderVariant='enhanced' textRenderVariant='text' fitScreen={false} isMobile={false} />}
+    </>
   );
 }
 
@@ -579,6 +525,9 @@ function NoAccessChip(props: { fileId: string }) {
 
 export function BlockPartHostedResource(props: {
   hostedResourcePart: DMessageHostedResourcePart,
+  hostedFragment: DMessageContentFragment,
+  messageDeployment?: string,
+  onArtifactSave?: (fragmentId: DMessageFragmentId, artifact: ArtifactReference) => () => boolean,
   fragmentId: DMessageFragmentId,
   messageGeneratorLlmId?: string | null,
   contentScaling: ContentScaling,
@@ -589,6 +538,11 @@ export function BlockPartHostedResource(props: {
 
   const { muted, resource } = props.hostedResourcePart;
   const { fragmentId, onFragmentDelete, onFragmentReplace } = props;
+  const { onArtifactSave } = props;
+  const handleArtifactSave = React.useCallback((artifact: ArtifactReference) => {
+    if (!onArtifactSave) throw new Error('Generated file saving is unavailable.');
+    return onArtifactSave(fragmentId, artifact);
+  }, [fragmentId, onArtifactSave]);
 
   const handleFragmentDelete = React.useCallback(() => {
     onFragmentDelete?.(fragmentId);
@@ -625,9 +579,11 @@ export function BlockPartHostedResource(props: {
       <AnthropicFileChip
         access={antAccess}
         fileId={resource.fileId}
+        expectedDeployment={props.messageDeployment}
+        artifact={props.hostedFragment.artifact || legacyCachedArtifact(resource.fileId)}
+        onArtifactSave={props.onArtifactSave ? handleArtifactSave : undefined}
         contentScaling={props.contentScaling}
         onFragmentDelete={onFragmentDelete ? handleFragmentDelete : undefined}
-        onFragmentReplace={onFragmentReplace ? handleFragmentReplace : undefined}
       />
     );
 

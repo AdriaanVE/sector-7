@@ -361,6 +361,7 @@ export function ChatMessage(props: {
   onMessageDelete?: (messageId: string) => void,
   onMessageFragmentAppend?: (messageId: DMessageId, fragment: DMessageFragment) => void
   onMessageFragmentDelete?: (messageId: DMessageId, fragmentId: DMessageFragmentId) => void,
+  onMessageArtifactSave?: (messageId: DMessageId, fragmentId: DMessageFragmentId, artifact: import('~/common/personal/artifact-schema').ArtifactReference) => () => boolean,
   onMessageFragmentReplace?: (messageId: DMessageId, fragmentId: DMessageFragmentId, newFragment: DMessageFragment) => void,
   onMessageToggleUserFlag?: (messageId: string, flag: DMessageUserFlag, maxPerConversation?: number) => void,
   onMessageTruncate?: (messageId: string) => void,
@@ -465,6 +466,12 @@ export function ChatMessage(props: {
   const handleFragmentDelete = React.useCallback((fragmentId: DMessageFragmentId) => {
     onMessageFragmentDelete?.(messageId, fragmentId);
   }, [messageId, onMessageFragmentDelete]);
+
+  const { onMessageArtifactSave } = props;
+  const handleArtifactSave = React.useCallback((fragmentId: DMessageFragmentId, artifact: import('~/common/personal/artifact-schema').ArtifactReference) => {
+    if (!onMessageArtifactSave) throw new Error('Generated file saving is unavailable.');
+    return onMessageArtifactSave(messageId, fragmentId, artifact);
+  }, [messageId, onMessageArtifactSave]);
 
   const handleFragmentReplace = React.useCallback((fragmentId: DMessageFragmentId, newFragment: DMessageFragment) => {
     onMessageFragmentReplace?.(messageId, fragmentId, newFragment);
@@ -1057,6 +1064,8 @@ export function ChatMessage(props: {
             isMobile={props.isMobile}
             messageRole={messageRole}
             messageGeneratorLlmId={messageGenerator?.mgt === 'aix' ? messageGenerator.aix?.mId : undefined}
+            messageDeployment={messageGenerator?.nativeHistory?.deployment}
+            onArtifactSave={!messagePendingIncomplete && props.onMessageArtifactSave ? handleArtifactSave : undefined}
             messagePendingIncomplete={messagePendingIncomplete}
             inFluxFragmentId={inFluxFragmentId}
             disableMarkdownText={disableMarkdown || fromUser /* User messages are edited as text. Try to have them in plain text. NOTE: This may bite. */}
