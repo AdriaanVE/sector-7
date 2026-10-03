@@ -4,7 +4,7 @@ import { completedToolSummary, hasVisibleAnswer, toolDisplayFragments } from '~/
 import { assertNoPendingQuestion } from '~/common/personal/questions';
 import { TurnNavigator } from '~/common/personal/TurnNavigator';
 import { QuestionCard } from '~/common/personal/QuestionCard';
-import { canMarkSeen } from '~/common/personal/attention';
+import { findChatScrollRoot, observeReplyEnd } from '~/common/personal/conversation-viewport';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -66,6 +66,7 @@ export function ChatMessageList(props: {
 }) {
 
   // state
+  const listRef = React.useRef<HTMLUListElement>(null);
   const [isImagining, setIsImagining] = React.useState(false);
   const [isSpeaking, setIsSpeaking] = React.useState(false);
   const [selectedMessages, setSelectedMessages] = React.useState<Set<string>>(new Set());
@@ -74,11 +75,12 @@ export function ChatMessageList(props: {
   const { notifyBooting } = useScrollToBottom();
   const showToolCalls = usePersonalSettings(state => state.showToolCalls);
   const [showSystemMessages] = useChatShowSystemMessages();
-  const { conversationMessages, historyTokenCount } = useChatStore(useShallow(({ conversations }) => {
+  const { conversationMessages, historyTokenCount, completedReplyId } = useChatStore(useShallow(({ conversations }) => {
     const conversation = conversations.find(conversation => conversation.id === props.conversationId);
     return {
       conversationMessages: conversation ? conversation.messages : stableNoMessages,
       historyTokenCount: conversation ? conversation.tokenCount : 0,
+      completedReplyId: conversation?.lastCompletedMessageId,
     };
   }));
   const { _composerInReferenceToCount, ephemerals, activityOpId } = useChatOverlayStore(props.conversationHandler?.conversationOverlayStore ?? null, useShallow(state => ({
@@ -87,20 +89,25 @@ export function ChatMessageList(props: {
     ephemerals: state.ephemerals?.length ? state.ephemerals : null,
   })));
 
+  const completedReply = conversationMessages.find(message => message.id === completedReplyId);
+  const completedReplyRenderable = !!completedReply && !completedReply.pendingIncomplete;
   React.useEffect(() => {
+    const list = listRef.current;
+    const root = findChatScrollRoot(list);
     const chat = useChatStore.getState().conversations.find(chat => chat.id === props.conversationId);
-    if (!chat?.lastCompletedMessageId) return;
-    const node = document.querySelector(`[data-message-id="${chat.lastCompletedMessageId}"]`);
-    if (!node) return;
-    const check = () => {
-      const rect = node.getBoundingClientRect();
-      if (canMarkSeen(rect.bottom <= window.innerHeight && rect.bottom >= 0, document.visibilityState === 'visible', document.hasFocus()))
-        useChatStore.getState()._editConversation(chat.id, { lastSeenMessageId: chat.lastCompletedMessageId, ...(chat.lastOutcome === 'error' || chat.lastOutcome === 'interrupted' ? { lastOutcome: 'ok' } : {}) });
-    };
-    const observer = new IntersectionObserver(check); observer.observe(node);
-    window.addEventListener('focus', check); document.addEventListener('visibilitychange', check); check();
-    return () => { observer.disconnect(); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check); };
-  }, [props.conversationId, conversationMessages]);
+    if (!list || !root || !chat?.lastCompletedMessageId || activityOpId === chat.lastCompletedMessageId) return;
+    const completedId = chat.lastCompletedMessageId;
+    const marker = Array.from(list.querySelectorAll<HTMLElement>('[data-reply-end]')).find(marker => marker.dataset.replyEnd === completedId);
+    if (!marker) return;
+    return observeReplyEnd(marker, root, () => {
+      const current = useChatStore.getState().conversations.find(chat => chat.id === props.conversationId);
+      if (!current || current.lastCompletedMessageId !== completedId || current.lastSeenMessageId === completedId && current.lastOutcome !== 'error' && current.lastOutcome !== 'interrupted') return;
+      useChatStore.getState()._editConversation(current.id, {
+        lastSeenMessageId: completedId,
+        ...(current.lastOutcome === 'error' || current.lastOutcome === 'interrupted' ? { lastOutcome: 'ok' } : {}),
+      });
+    });
+  }, [props.conversationId, completedReplyId, completedReply, completedReplyRenderable, activityOpId]);
 
   // derived state
   const { conversationHandler, conversationId, capabilityHasT2I, onConversationBranch, onConversationExecuteHistory, onTextDiagram, onTextImagine } = props;
@@ -422,7 +429,9 @@ export function ChatMessageList(props: {
     // layout
     display: 'flex',
     flexDirection: 'column',
-  }), [props.sx]);
+    position: 'relative',
+    pr: conversationMessages.filter(message => message.role === 'user').length >= 3 ? '56px' : undefined,
+  }), [props.sx, conversationMessages]);
 
 
   // no conversation: sine qua non
@@ -445,9 +454,9 @@ export function ChatMessageList(props: {
   const visibleMessages = showToolCalls || props.isMessageSelectionMode ? filteredMessages : filteredMessages.filter(message => message.role !== 'assistant' || message.generator?.upstreamHandle || messageWasOutOfTokens(message.generator) || hasVisibleAnswer(toolDisplayFragments(message.fragments, false, activityOpId === message.id)) || !!completedToolSummary(message.fragments, false, !!message.pendingIncomplete || activityOpId === message.id, message.generator?.nativeHistory));
 
   return (
-    <List role='chat-messages-list' sx={listSx} onCopy={clipboardInterceptCtrlCForCleanup}>
+    <List ref={listRef} role='chat-messages-list' sx={listSx} onCopy={clipboardInterceptCtrlCForCleanup}>
 
-      <TurnNavigator messages={filteredMessages} />
+      {!props.isMessageSelectionMode && <TurnNavigator messages={filteredMessages} listRef={listRef} />}
       {conversationId && <QuestionCard conversationId={conversationId} />}
 
       {props.isMessageSelectionMode && (

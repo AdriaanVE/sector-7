@@ -747,6 +747,7 @@ export function Composer(props: {
 
   return (
     <Box
+      data-chat-composer
       aria-label='New Message'
       component='section'
       bgcolor={showTint ? `var(--joy-palette-${showTint}-softBg)` : themeBgAppChatComposer}
