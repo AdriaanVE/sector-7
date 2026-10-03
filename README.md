@@ -6,7 +6,7 @@ Version **0.1.0** is an early working preview. It keeps big-AGI's Next.js, React
 
 ## Start on your Mac
 
-Use Node 22, 24 or 26 and npm. Clone the complete repository, then run from its root:
+Use Node 22, 24 or 26 and npm. On macOS, the disk-lock dependency compiles during installation and requires existing Xcode Command Line Tools and Python. Use the same Node major version for installation and running the app. Clone the complete repository, then run from its root:
 
 ```sh
 npm ci
@@ -26,7 +26,7 @@ Stop the running app before rebuilding its production output. Source archives ne
 
 The launcher reads `BIFROST_API_KEY` or the existing macOS Keychain entry: account `adriaan.van.erps`, service `telenet-bifrost-dev-virtual-key`. Override these names with `BIFROST_KEYCHAIN_ACCOUNT` and `BIFROST_KEYCHAIN_SERVICE`. Set `BIFROST_ANTHROPIC_BASE_URL` to change the Anthropic-compatible gateway endpoint. Keep credentials in your environment or Keychain, never in source files or browser storage. [Configuration reference](docs/configuration.md).
 
-Chat models are `claude-opus-5-5` and `claude-sonnet-5-5`, with medium effort by default. Claude's native web search and web fetch travel through Bifrost, preserving citations and full provider history. Future OpenAI support will use provider-specific adapters.
+Chat models are `claude-opus-5-5` and `claude-sonnet-5-5`, with medium effort by default. Claude's native web search and web fetch travel through Bifrost, preserving citations and full provider history. Web search is on by default for new chats and can be disabled in the conversation menu. Future OpenAI support will use provider-specific adapters.
 
 ## Workspace
 
