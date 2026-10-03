@@ -150,9 +150,9 @@ export async function runPersonaOnConversationHead(
         else if (++toolCalls > 32 || turn >= 7 || Date.now() > deadline) result = { error: 'Local tool turn limit reached. Ask to continue.' };
         else {
           executedLocal = true;
-          cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: localToolPhase(call.name) } });
+          cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: localToolPhase(call.name), toolId: call.id } });
           try { result = await dispatchLocalTool(call, project.id, conversationId, abortController.signal, detail => {
-            if (lease.isCurrent()) cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: abortController.signal.aborted ? 'Stopping' : 'Running command', detail: detail.slice(-12000) } });
+            if (lease.isCurrent()) cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: abortController.signal.aborted ? 'Stopping' : 'Running command', detail: detail.slice(-12000), toolId: call.id } });
           }); }
           catch (error) { result = { error: error instanceof Error ? error.message : 'Local tool failed.' }; }
         }

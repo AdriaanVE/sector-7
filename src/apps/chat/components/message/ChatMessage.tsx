@@ -1,3 +1,5 @@
+import { usePersonalSettings } from '~/common/personal/store-personal-settings';
+import { toolDisplayFragments } from '~/common/personal/tool-display';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { shallow } from 'zustand/vanilla/shallow';
@@ -339,6 +341,7 @@ export function ChatMessage(props: {
   isImagining?: boolean,
   isSpeaking?: boolean,
   hideAvatar?: boolean,
+  hideActivityPlaceholder?: boolean,
   blocksStretch?: boolean, // overrides 'messageFullWidth'
   showAntPromptCaching?: boolean,
   showBlocksDate?: boolean,
@@ -414,12 +417,15 @@ export function ChatMessage(props: {
   const isVndAndCacheAuto = !!props.showAntPromptCaching && messageHasUserFlag(props.message, MESSAGE_FLAG_VND_ANT_CACHE_AUTO);
   const isVndAndCacheUser = !!props.showAntPromptCaching && messageHasUserFlag(props.message, MESSAGE_FLAG_VND_ANT_CACHE_USER);
 
+  const showToolCalls = usePersonalSettings(state => state.showToolCalls);
+  const displayedFragments = React.useMemo(() => toolDisplayFragments(messageFragments, showToolCalls, props.hideActivityPlaceholder), [messageFragments, props.hideActivityPlaceholder, showToolCalls]);
+
   const {
     annotationFragments,    // Web Citations, References (rendered at top)
     interleavedFragments,   // Reasoning, Placeholders, Text, Code, Tools (interleaved in temporal order)
     imageAttachments,       // Stamp-sized Images
     nonImageAttachments,    // Document Attachments, likely the User dropped them in
-  } = useFragmentBuckets(messageFragments);
+  } = useFragmentBuckets(displayedFragments);
 
   // Activity follows the raw stream order, independent of display filtering and injected layout.
   const inFluxFragmentId = React.useMemo(() => messageFragmentsInFluxId(messageFragments, !!messagePendingIncomplete), [messageFragments, messagePendingIncomplete]);

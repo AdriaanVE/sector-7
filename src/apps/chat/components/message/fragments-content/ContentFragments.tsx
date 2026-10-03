@@ -218,7 +218,7 @@ export function ContentFragments(props: {
 
       // editing for text parts, tool invocations, or tool responses
       if (props.textEditsState && !!props.setEditedText && (
-        isTextPart(part) || part.pt === 'error' || part.pt === 'tool_invocation' || part.pt === 'tool_response'
+        isTextPart(part) || part.pt === 'error' && part.hint !== 'tool-display' || part.pt === 'tool_invocation' || part.pt === 'tool_response'
       )) {
 
         // Determine the text to edit based on the part type

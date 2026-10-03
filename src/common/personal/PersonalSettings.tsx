@@ -27,6 +27,11 @@ export function PersonalSettings() {
       <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>Instructions apply to future requests. Project and edited chat instructions follow these.</Typography>
     </Box>
     <Box component='section' sx={{ display: 'grid', gap: 1.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+      <Typography level='title-md'>Conversation</Typography>
+      <Checkbox label='Show all tool calls' checked={settings.showToolCalls} onChange={event => settings.setShowToolCalls(event.target.checked)} />
+      <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>Show tool inputs, results and logs in messages. Hidden by default; a concise activity line shows what is happening.</Typography>
+    </Box>
+    <Box component='section' sx={{ display: 'grid', gap: 1.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
       <Typography level='title-md'>AI extras</Typography>
       <Checkbox label='Automatic AI extras' checked={extras} onChange={event => { chatAI.setAutoSuggestDiagrams(event.target.checked); chatAI.setAutoSuggestHTMLUI(event.target.checked); chatAI.setAutoSuggestQuestions(event.target.checked); chatAI.setAutoSuggestAttachmentPrompts(event.target.checked); }} />
       <Box component='ul' sx={{ m: 0, pl: 2.25, display: 'grid', gap: 0.75, color: 'text.tertiary', fontSize: 'sm', lineHeight: 1.6 }}>

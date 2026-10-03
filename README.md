@@ -34,7 +34,7 @@ Projects group chats and share instructions. Use Add folder to choose a local re
 
 Chats, projects, processed context and owned assets save automatically on disk. The existing data directory stays `~/Library/Application Support/AI GUI`, including after the Sector 7 rename. Set `AI_GUI_DATA_DIR` to choose another location. Browser caches are disposable. Settings provides backup and recovery controls. [Storage and backup](docs/local-workspace-data.md).
 
-The UI retains Markdown/code/math, attachments, editing, retry, branching, archive, local exports, voice input and explicit questions requiring your decision. Local slash skills follow the selected model's Claude/Codex folder. Automatic AI extras can be disabled in Settings.
+The UI retains Markdown/code/math, attachments, editing, retry, branching, archive, local exports, voice input and explicit questions requiring your decision. Local slash skills follow the selected model's Claude/Codex folder. Automatic AI extras can be disabled in Settings. Detailed tool calls are hidden by default; a concise neon activity line shows the current task. Enable Settings > Conversation > Show all tool calls to inspect saved tool inputs and results.
 
 ## Preview limits
 

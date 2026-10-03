@@ -143,7 +143,7 @@ export function validateWorkspace(value: unknown): Workspace {
   for (const [name, store] of Object.entries(workspace.stores)) {
     if (!store) continue;
     const allowed = name === 'app-chats' ? ['conversations'] : name === 'app-folders' ? ['folders', 'enableFolders', 'migrationSummary']
-      : name === 'app-project-files' ? ['files'] : name === 'app-personal-settings' ? ['instructions']
+      : name === 'app-project-files' ? ['files'] : name === 'app-personal-settings' ? ['instructions', 'showToolCalls']
       : name === 'app-app-chat' ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'showTextDiff', 'showSystemMessages']
       : name === 'app-app-chat-panes-2' ? ['chatPanes', 'chatPaneFocusIndex']
       : name === 'app-ui' ? ['enterIsNewline', 'contentScaling', 'doubleClickToEdit', 'centerMode', 'complexityMode'] : ['sidebarOpen'];
@@ -164,7 +164,10 @@ export function validateWorkspace(value: unknown): Workspace {
     }
     if (name === 'app-folders') { uniqueIds(z.array(folder).parse(store.state.folders), 'project'); z.boolean().parse(store.state.enableFolders); }
     if (name === 'app-project-files') { const files = z.record(safeId, projectFile).parse(store.state.files); for (const [id, file] of Object.entries(files)) if (id !== file.id) throw new Error('Project file key does not match its ID.'); }
-    if (name === 'app-personal-settings') z.string().parse(store.state.instructions);
+    if (name === 'app-personal-settings') {
+      z.string().parse(store.state.instructions);
+      z.boolean().optional().parse(store.state.showToolCalls);
+    }
   }
   if (/"(?:anthropicKey|anthropicHost|accessToken|apiKey|sessionToken|_abortController)"\s*:/.test(JSON.stringify(workspace))) throw new Error('Workspace contains transient or credential fields.');
   for (const id of workspaceAssetIds(workspace)) if (!workspace.assets[id]) throw new Error(`Referenced asset ${id} is missing from the manifest.`);
