@@ -31,7 +31,7 @@ test('actual request assembly includes instructions, skills, project provenance 
   const built = assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]);
   assert.ok(JSON.stringify(built.system).includes('PROJECT INSTRUCTIONS')); assert.ok(JSON.stringify(built.messages).includes('SKILL INSTRUCTIONS'));
   assert.deepEqual(built.context?.files, []); assert.equal(built.budget.limit, 100000);
-  assert.equal(built.budget.total - built.inputTokens, 1024 + 8192 + 16384 + 10000);
+  assert.equal(built.budget.total - built.inputTokens, 1024 + 512 + 8192 + 16384 + 10000);
   useModelsStore.getState().updateLLM('claude-opus-5-5', { contextTokens: 1000 });
   assert.equal(assembleRequest(chat.id, chat.chatConfig.llmId, [prompt], { allowOverBudget: true }).budget.fits, false);
   assert.throws(() => assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]), /Start a shorter chat/);

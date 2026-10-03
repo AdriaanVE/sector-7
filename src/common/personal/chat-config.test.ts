@@ -8,7 +8,7 @@ test('all effort stops build curated replacements without stale global parameter
     const parameters = chatParameters({ ...normalizeChatConfig(), effort });
     assert.equal(parameters.llmVndAntEffort, effort); assert.equal(parameters.llmVndAntThinkingBudget, -1);
     assert.equal(parameters.llmVndAntSkills, undefined); assert.equal(parameters.llmVndAntInfSpeed, undefined);
-    assert.equal(parameters.llmVndAntWebSearch, undefined);
+    assert.equal(parameters.llmVndAntWebSearch, 'auto');
   }
 });
 test('instructions layer in order and remain stable throughout one day', () => {
@@ -26,7 +26,28 @@ test('estimated context budget reserves output, thinking and safety margin', () 
   assert.equal(estimateContextBudget(800, 1000, 100, 100).fits, false);
 });
 
-test('invalid imported model settings normalize to Opus medium', () => { assert.deepEqual(normalizeChatConfig(), { llmId: 'claude-opus-5-5', effort: 'medium', tools: { webSearch: false, webFetch: false, codeSandbox: false } }); });
+test('missing chat settings enable web search with Opus medium defaults', () => {
+  const expected = { llmId: 'claude-opus-5-5', effort: 'medium', tools: { webSearch: true, webFetch: false, codeSandbox: false } };
+  for (const config of [undefined, null, {}, { tools: undefined }]) {
+    assert.deepEqual(normalizeChatConfig(config), expected);
+  }
+});
+
+test('explicit web search opt-out persists and removes native search parameters', () => {
+  const config = normalizeChatConfig({ llmId: 'claude-sonnet-5-5', effort: 'high', tools: { webSearch: false, webFetch: false, codeSandbox: false } });
+  assert.equal(config.tools.webSearch, false);
+  const parameters = chatParameters(config);
+  assert.equal(parameters.llmRef, 'claude-sonnet-5-5'); assert.equal(parameters.llmVndAntEffort, 'high');
+  assert.equal(parameters.llmVndAntWebSearch, undefined);
+  assert.equal(parameters.llmVndAntWebFetch, undefined); assert.equal(parameters.llmVndAntCodeSandbox, undefined);
+});
+
+test('default web search selects the basic native tool without enabling other tools', () => {
+  const parameters = chatParameters(normalizeChatConfig());
+  assert.equal(parameters.llmVndAntWebSearch, 'auto');
+  assert.equal(parameters.llmVndAntWebDynamic, undefined);
+  assert.equal(parameters.llmVndAntWebFetch, undefined); assert.equal(parameters.llmVndAntCodeSandbox, undefined);
+});
 
 
 test('personal native web tools select basic versions without dynamic code', () => {

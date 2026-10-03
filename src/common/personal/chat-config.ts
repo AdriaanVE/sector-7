@@ -16,7 +16,7 @@ export function normalizeChatConfig(value?: Partial<ChatConfig> | null, recovere
     llmId,
     effort: CHAT_EFFORTS.find(effort => effort === value?.effort) ?? 'medium',
     tools: {
-      webSearch: value?.tools?.webSearch === true,
+      webSearch: value?.tools?.webSearch !== false,
       webFetch: value?.tools?.webFetch === true,
       codeSandbox: value?.tools?.codeSandbox === true,
     },

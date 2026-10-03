@@ -419,7 +419,7 @@ export async function aixChatGenerateText_Simple(
   const { transportAccess: aixAccess, vendor: llmVendor, serviceSettings: llmServiceSettings } = findServiceAccessOrThrow<object, AixAPI_Access>(llm.sId);
 
   // Aix Model
-  const llmParameters = getAllModelParameterValues(llm.initialParameters, clientOptions?.llmUserParametersReplacement ?? chatParameters(normalizeChatConfig({ llmId: 'claude-sonnet-5-5' })));
+  const llmParameters = getAllModelParameterValues(llm.initialParameters, clientOptions?.llmUserParametersReplacement ?? chatParameters(normalizeChatConfig({ llmId: 'claude-sonnet-5-5', tools: { webSearch: false, webFetch: false, codeSandbox: false } })));
   const aixModel = aixCreateModelFromLLMOptions(llm.interfaces, llmParameters, clientOptions?.llmOptionsOverride, llmId);
 
   // Aix ChatGenerate Request
@@ -611,7 +611,7 @@ export async function aixChatGenerateContent_DMessage_orThrow<TServiceSettings e
   const { transportAccess: aixAccess, vendor: llmVendor, serviceSettings: llmServiceSettings } = findServiceAccessOrThrow<TServiceSettings, TAccess>(llm.sId);
 
   // Aix Model
-  const llmParameters = getAllModelParameterValues(llm.initialParameters, clientOptions?.llmUserParametersReplacement ?? chatParameters(normalizeChatConfig({ llmId: 'claude-sonnet-5-5' })));
+  const llmParameters = getAllModelParameterValues(llm.initialParameters, clientOptions?.llmUserParametersReplacement ?? chatParameters(normalizeChatConfig({ llmId: 'claude-sonnet-5-5', tools: { webSearch: false, webFetch: false, codeSandbox: false } })));
   const aixModel = aixCreateModelFromLLMOptions(llm.interfaces, llmParameters, clientOptions?.llmOptionsOverride, llmId);
   aixDecorateModelFromGlobals(aixModel, {
     vndAntContainerId: clientOptions?.antContainerId,
