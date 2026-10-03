@@ -35,7 +35,7 @@ interface AIPreferencesActions {
 
 
 const createAIPreferencesDefaults = (): AIPreferencesState => ({
-  vndAntInlineFiles: 'inline-file',
+  vndAntInlineFiles: 'off',
   vndGeminiVertexLinks: 'as-is',
 });
 

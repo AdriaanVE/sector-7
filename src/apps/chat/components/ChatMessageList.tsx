@@ -302,6 +302,11 @@ export function ChatMessageList(props: {
     conversationHandler?.messageFragmentDelete(messageId, fragmentId, false, true);
   }, [conversationHandler]);
 
+  const handleMessageArtifactSave = React.useCallback((messageId: DMessageId, fragmentId: DMessageFragmentId, artifact: import('~/common/personal/artifact-schema').ArtifactReference) => {
+    if (!conversationHandler?.historyFindMessageOrThrow(messageId)) throw new Error('The generated file message was removed.');
+    return conversationHandler.messageArtifactSave(messageId, fragmentId, artifact);
+  }, [conversationHandler]);
+
   const handleMessageReplaceFragment = React.useCallback((messageId: DMessageId, fragmentId: DMessageFragmentId, newFragment: DMessageFragment) => {
     if (conversationId) assertNoPendingQuestion(conversationId);
     conversationHandler?.messageFragmentReplace(messageId, fragmentId, newFragment, true);
@@ -510,6 +515,7 @@ export function ChatMessageList(props: {
               onMessageFragmentAppend={handleMessageAppendFragment}
               onMessageFragmentDelete={handleMessageDeleteFragment}
               onMessageFragmentReplace={handleMessageReplaceFragment}
+              onMessageArtifactSave={handleMessageArtifactSave}
               onMessageToggleUserFlag={handleMessageToggleUserFlag}
               onMessageTruncate={handleMessageTruncate}
               onTextDiagram={handleTextDiagram}

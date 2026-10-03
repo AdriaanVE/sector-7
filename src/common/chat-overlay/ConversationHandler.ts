@@ -177,6 +177,21 @@ export class ConversationHandler {
     _chatStoreActions.deleteMessageFragment(this.conversationId, messageId, fragmentId, complete, touch);
   }
 
+  messageArtifactSave(messageId: string, fragmentId: string, artifact: import('~/common/personal/artifact-schema').ArtifactReference) {
+    _chatStoreActions.editMessage(this.conversationId, messageId, message => {
+      if (message.pendingIncomplete) throw new Error('Wait for the reply to finish before saving generated files.');
+      const fragment = message.fragments.find(f => f.fId === fragmentId);
+      if (!fragment || fragment.ft !== 'content' || fragment.part.pt !== 'hosted_resource' || fragment.part.resource.via !== 'anthropic' || fragment.part.resource.fileId !== artifact.source.fileId || artifact.source.provider !== 'anthropic')
+        throw new Error('The generated file message changed. Keep the remote original.');
+      return { fragments: message.fragments.map(f => f.fId === fragmentId ? { ...f, artifact } : f) };
+    }, false, false);
+    return () => {
+      const message = this.historyFindMessageOrThrow(messageId);
+      const fragment = message?.fragments.find(f => f.fId === fragmentId);
+      return !!message && !message.pendingIncomplete && fragment?.ft === 'content' && fragment.artifact?.assetId === artifact.assetId;
+    };
+  }
+
   messageFragmentReplace(messageId: string, fragmentId: string, newFragment: DMessageFragment, messageComplete: boolean) {
     _chatStoreActions.replaceMessageFragment(this.conversationId, messageId, fragmentId, newFragment, messageComplete, true);
   }

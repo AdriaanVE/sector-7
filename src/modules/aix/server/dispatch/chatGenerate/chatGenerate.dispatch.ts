@@ -1,6 +1,6 @@
 import { prepareNativeRequest, nativeRequestPrefix } from './native-request';
 import { assertPersonalHostedTools, PERSONAL_NATIVE_CAPABILITIES } from '~/modules/llms/server/anthropic/personal-access';
-import { ANTHROPIC_API_PATHS, anthropicAccess, anthropicBetaFeatures } from '~/modules/llms/server/anthropic/anthropic.access';
+import { ANTHROPIC_API_PATHS, anthropicAccess, anthropicDeployment, anthropicBetaFeatures } from '~/modules/llms/server/anthropic/anthropic.access';
 import { OPENAI_API_PATHS, openAIAccess, OpenAIDialects } from '~/modules/llms/server/openai/openai.access';
 import { bedrockAccessAsync, bedrockResolveRegion, bedrockURLMantle, bedrockURLRuntime } from '~/modules/llms/server/bedrock/bedrock.access';
 import { geminiAccess } from '~/modules/llms/server/gemini/gemini.access';
@@ -23,7 +23,6 @@ import { aixToOpenAIResponses, openAIDialectToRspVendor } from './adapters/opena
 import { aixToXAIResponses } from './adapters/xai.responsesCreate';
 
 import type { IParticleTransmitter } from './parsers/IParticleTransmitter';
-import { createAnthropicFileInlineTransform } from './parsers/anthropic.transform-fileInline';
 import { createAnthropicMessageParser, createAnthropicMessageParserNS } from './parsers/anthropic.parser';
 import { createBedrockConverseParserNS, createBedrockConverseStreamParser } from './parsers/bedrock-converse.parser';
 import { createGeminiGenerateContentResponseParser } from './parsers/gemini.parser';
@@ -89,9 +88,7 @@ export async function createChatGenerateDispatch(access: AixAPI_Access, model: A
     case 'anthropic': {
 
       const effectiveModel = { ...model, vndAntWebDynamic: false };
-      const endpoint = anthropicAccess(access, ANTHROPIC_API_PATHS.messages).url;
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
-      const nativeDeployment = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      const nativeDeployment = await anthropicDeployment(access);
       const hostedFeatures = { ...aixAnthropicHostedFeatures(effectiveModel, chatGenerate), nativeDeployment, enableThinkingBindingControls: PERSONAL_NATIVE_CAPABILITIES.thinkingBinding };
       assertPersonalHostedTools(hostedFeatures);
       const safeRequest = await prepareNativeRequest(effectiveModel, chatGenerate, nativeDeployment);
@@ -112,10 +109,7 @@ export async function createChatGenerateDispatch(access: AixAPI_Access, model: A
         },
         demuxerFormat: streaming ? 'fast-sse' : null,
         chatGenerateParse: streaming ? createAnthropicMessageParser({ deployment: nativeDeployment, model: model.id, requestPrefix }) : createAnthropicMessageParserNS({ deployment: nativeDeployment, model: model.id, requestPrefix }),
-        particleTransform: !model.vndAntTransformInlineFiles ? undefined : createAnthropicFileInlineTransform(
-          anthropicAccess(access, ANTHROPIC_API_PATHS.files, hostedFeatures),
-          model.vndAntTransformInlineFiles,
-        ),
+        // Preserve hosted originals. Local previews require a durable message owner first.
       };
     }
 

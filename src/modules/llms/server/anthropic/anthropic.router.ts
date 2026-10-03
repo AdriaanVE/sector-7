@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { TRPCError } from '@trpc/server';
 
 import { createTRPCRouter, edgeProcedure } from '~/server/trpc/trpc.server';
 import { fetchJsonOrTRPCThrow, fetchResponseOrTRPCThrow, fetchTextOrTRPCThrow } from '~/server/trpc/trpc.router.fetchers';
@@ -8,7 +9,7 @@ import { convert_UInt8Array_To_Base64 } from '~/common/util/blobUtils';
 import { FileMetadataResponse_schema, ListModelsResponse_schema } from '../llm.server.types';
 import { listModelsRunDispatch } from '../listModels.dispatch';
 
-import { ANTHROPIC_API_PATHS, anthropicAccess, AnthropicAccessSchema, anthropicAccessSchema, AnthropicHostedFeatures } from './anthropic.access';
+import { ANTHROPIC_API_PATHS, anthropicAccess, anthropicDeployment, AnthropicAccessSchema, anthropicAccessSchema, AnthropicHostedFeatures } from './anthropic.access';
 
 
 // Mappers
@@ -63,8 +64,11 @@ export const llmAnthropicRouter = createTRPCRouter({
     .input(z.object({
       access: anthropicAccessSchema,
       fileId: z.string(),
+      expectedDeployment: z.string().optional(),
     }))
-    .mutation(async ({ input: { access, fileId } }) => {
+    .mutation(async ({ input: { access, fileId, expectedDeployment } }) => {
+      if (expectedDeployment && await anthropicDeployment(access) !== expectedDeployment)
+        throw new TRPCError({ code: 'CONFLICT', message: 'This file belongs to a different Bifrost deployment.' });
       const { headers, url } = anthropicAccess(access, `${ANTHROPIC_API_PATHS.files}/${fileId}`, { enableSkills: true, enableCodeExecution: true });
       await fetchTextOrTRPCThrow({ url, headers, method: 'DELETE', name: 'Anthropic' });
       return { success: true };
@@ -75,8 +79,12 @@ export const llmAnthropicRouter = createTRPCRouter({
     .input(z.object({
       access: anthropicAccessSchema,
       fileId: z.string(),
+      expectedDeployment: z.string().optional(),
     }))
-    .query(async ({ input: { access, fileId } }) => {
+    .query(async ({ input: { access, fileId, expectedDeployment } }) => {
+      const deployment = await anthropicDeployment(access);
+      if (expectedDeployment && deployment !== expectedDeployment)
+        throw new TRPCError({ code: 'CONFLICT', message: 'This file belongs to a different Bifrost deployment.' });
       const { headers, url } = anthropicAccess(access, `${ANTHROPIC_API_PATHS.files}/${fileId}/content`, { enableSkills: true, enableCodeExecution: true });
       const response = await fetchResponseOrTRPCThrow({ url, headers, name: 'Anthropic' });
 
@@ -91,6 +99,7 @@ export const llmAnthropicRouter = createTRPCRouter({
         throw new Error(`File too large to download (${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)} MB, limit ${MAX_FILE_BYTES / 1024 / 1024} MB)`);
 
       return {
+        deployment,
         base64Data: convert_UInt8Array_To_Base64(new Uint8Array(arrayBuffer), 'llms.anthropic.fileDownload'),
         mimeType: response.headers.get('content-type') || 'application/octet-stream',
       };

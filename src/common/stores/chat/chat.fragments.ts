@@ -91,6 +91,7 @@ type _DMessageFragmentWrapper<TFragment, TPart extends { pt: string }> = {
   fId: DMessageFragmentId;
   part: TPart;
   originId?: string;                  // optional, for multi-model, identifies which actor produced this fragment
+  artifact?: import('~/common/personal/artifact-schema').ArtifactReference; // display-only original ownership and preview
   vendorState?: DMessageFragmentVendorState; // optional vendor-specific protocol state (opaque, lossy-safe)
 }
 
@@ -642,6 +643,7 @@ function _carryMeta<T extends DMessageFragment>(source: Readonly<DMessageFragmen
     return target;
 
   let enriched = target;
+  if (source.artifact) enriched = { ...enriched, artifact: structuredClone(source.artifact) };
   if ('originId' in source && source.originId)
     enriched = { ...enriched, originId: source.originId };
 

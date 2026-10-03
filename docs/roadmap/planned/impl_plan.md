@@ -1,32 +1,36 @@
-# Personal Claude workspace: final implementation plan
+# Sector 7: implementation plan
 
 Status: In progress
 Approval: Implementation authorized 2026-10-03; all three product calls resolved (see Human calls)
-Date: 2026-10-03
-Repository: /Users/adriaan.van.erps/Code/AI GUI
-Analyzed base: 80d366a88cc8aa885a2d62ca9c60100eb72af40e, big-AGI Open 2.1.1
+Date: 2026-10-03; reconciled 2026-10-04
+Repository: /Users/adriaan.van.erps/Code/sector-7, main
+Current source: a7d9b1f3ea7c9ebd8115dda2beded33c4cd8460f
+Original analyzed base: 80d366a88cc8aa885a2d62ca9c60100eb72af40e, big-AGI Open 2.1.1
 Supersedes: [neon-tokyo-chat.md](neon-tokyo-chat.md) (revised plan) as the implementation reference
 Inputs: [review](neon-tokyo-chat-review.md), [review analysis](../../analysis/neon-tokyo-chat-review-analysis.md),
 [original analysis](../../analysis/big-agi-remodel.md)
 
-This plan is the revised plan plus the second-pass review corrections (marked **[R2]**). Each
-**[R2]** item was checked against source at the analyzed base.
+This plan incorporates the second-pass review corrections (marked **[R2]**) and later user
+decisions in its active sections. Original **[R2]** source references describe the original
+analyzed base, not current line numbers. Appended checkpoints preserve implementation history;
+these active sections govern where later decisions supersede that history.
 
 ## Outcome
 
-Remodel this big-AGI clone in place into Adriaan's local browser chat app. Keep the framework,
-AIX adapters, message engine, attachment converters and renderers. Deliver:
+Remodel this big-AGI clone into Sector 7, Adriaan's local Mac browser chat and coding app. Keep
+the framework, AIX adapters, message engine, attachment converters and renderers. Deliver:
 
 - A ChatGPT/Codex-style sidebar and conversation area.
 - Claude through Bifrost.
-- Projects with automatic instructions and files.
+- Projects with shared instructions and live local folder connections.
 - Automatic disk saving.
 - Activity and attention states.
 - A compact turn navigator for long chats.
 
-Delivery is in five milestones. Disk persistence, projects, attention and hosted tools are
-required outcomes; the milestones sequence them, they do not defer them. No application code has
-been written.
+Delivery remains in five milestones. A working 0.1.0 source preview and reviewed follow-up
+changes exist. Disk persistence, projects, attention, native search/fetch and local coding tools
+remain required outcomes. Publishing the preview does not close milestone acceptance. Hosted
+code execution is unsupported on this gateway and is not a required enabled capability.
 
 ## Settled product decisions
 
@@ -35,19 +39,33 @@ been written.
 - New chats default to Opus 5.5. Both models default to medium effort, with a per-chat effort
   slider (low, medium, high, xhigh, max).
 - Both models always use adaptive thinking. Hide the Sonnet Thinking switch and Opus `fast_2x`.
-- Projects group chats and share instructions and files. These are included automatically in
-  future requests.
+- Projects group chats and share instructions. Add folder opens the native Mac folder browser;
+  connected folders provide current files through on-demand model tools. New requests do not
+  bulk import project snapshots. Historical project files and message attachments remain owned
+  and recoverable.
 - Chats, projects and files save to disk automatically. Disk is the only durable store.
 - Keep image generation, attachments, search, Markdown/code, editing, retry, branching, archive
   and local backup. The image model connection is chosen later.
 - Keep microphone input and the ASRx infrastructure; the voice model is chosen later. Remove
   calls, spoken replies and read-aloud.
-- Include Claude hosted web search, fetch and code execution through Bifrost. Code runs in the
-  remote sandbox, never on the Mac.
+- Include Claude native web search and fetch through Bifrost. Search defaults on for new chats;
+  explicit opt-out is respected. Hosted code execution is unsupported on this deployment.
+- Connected projects authorize local file read/search/list, edit/create/move/recoverable delete,
+  shell/CLI, tests and Git. Commands use Sector 7's local process permissions; a working
+  directory is not a sandbox. Bifrost supplies model transport, not filesystem access.
+- Existing local slash skills are filtered to the selected provider's Claude/Codex folder and
+  snapshotted on Send. Skill selection itself grants no additional tools or permissions.
+- Keep automatic AI extras with Settings controls, using Sonnet 5.5 medium. Background utility
+  requests remain tool-free.
 - Working means an active query. Waiting means unread, or a question that needs an answer; it is
   not a prompt queue. Claude signals questions explicitly through a tool.
-- Dark-only first theme: midnight/indigo, pink/cyan neon and restrained gradients. Richer Tokyo
-  styling comes later.
+- Use the supplied Sector 7 brand board: deep-night surfaces, Mako green, violet accents, Inter
+  and JetBrains Mono. Supplied ChatGPT/Codex rail geometry governs the layout. Further daily-use
+  visual refinement is deferred.
+- Show the model in the top selector; hide repeated model names in message headers. Hide detailed
+  tool calls by default with Settings > Conversation > Show all tool calls to reveal saved
+  details. Keep a compact neon live activity line and muted completed tool summaries. This
+  display choice must preserve execution, provider history, questions, errors and citations.
 - Hard fork of chat/layout; keep diffs in `src/modules/aix/**` and `src/modules/llms/**` small.
   No feature-flag framework.
 
@@ -72,7 +90,8 @@ notices.
 **Out of scope:**
 
 - OpenAI chat models, the broad provider wizard and browser API-key fields.
-- Local shell tools, MCP, cloud services, a native Mac wrapper, RAG and cross-chat memory.
+- MCP, cloud services, a native Mac wrapper, RAG and cross-chat memory.
+- Hosted code execution enablement on the current unsupported Bifrost deployment.
 - Live jobs that survive a browser reload.
 
 Image and transcription credentials must be server-side when configured later.
@@ -82,8 +101,9 @@ Image and transcription credentials must be server-side when configured later.
 ### Request settings
 
 - Add a serializable per-chat config: `{ llmId, effort, tools: { webSearch, webFetch, codeSandbox } }`.
-  Import and new-chat defaults are Opus/medium/all tools off, unless a valid allowed model can be
-  recovered from the chat.
+  New chats and missing imported preferences default to Opus/medium/search on, fetch and hosted
+  code off, unless a valid allowed model can be recovered. Explicit search opt-out persists;
+  hosted code remains unavailable. Utility requests explicitly use tool-free settings.
 - **[R2] Use `llmUserParametersReplacement`, not `llmOptionsOverride`, as the main path.**
   - Replacement substitutes the whole global `llm.userParameters` (`aix.client.ts:418,610`).
     `initialParameters` still apply.
@@ -114,8 +134,8 @@ Image and transcription credentials must be server-side when configured later.
 - Replace `ConversationHandler.inlineUpdatePurposeInHistory` and the `err-no-persona` guard
   (`_handleExecute.ts:64-67`) with the instruction builder. Retry must not re-run any persona
   refresh.
-- An explicitly edited or imported chat system message is kept. Its append/replace rule is open
-  (Human call 1).
+- An explicitly edited or imported chat system message is appended as the final instruction
+  layer, after neutral, personal and project instructions (resolved 2026-10-03).
 - **[R2] Date context must be date-only.** `bareBonesPromptMixer` sets `lowHourPrecision` from
   the `autoVndAntBreakpoints` setting (`pmix.ts:85-95`). A time-of-day in the system prompt
   changes the cached prefix on every request. The builder emits the current date at day
@@ -124,19 +144,21 @@ Image and transcription credentials must be server-side when configured later.
 
 ### Project context and caching
 
-- Project files go in one leading synthetic user content block with source delimiters. They are
-  content, not system instructions. The block is assembled from the processed file records at
-  request time and is never stored in history.
-- **[R2] Cache breakpoints.** The existing auto-caching
-  (`ConversationHandler.inlineUpdateAutoPromptCaching`) flags the system message plus the last
-  two user messages. The adapter caps at 4 breakpoints by **removing the earliest**
-  (`anthropic.messageCreate.ts:488-499`). The budget is: system (1) + project block (1) + last
-  two user turns (2) = 4. One user-pinned breakpoint would then evict the system breakpoint.
-  Rule: in personal mode, place the project-block breakpoint and reduce auto-flagging to the
-  last **one** user message when a project block exists. Add a unit test on the final wire.
-- File or instruction edits change the prefix. The next request misses the cache once and may
-  drop preserved thinking through the existing `drop_block` path. That is acceptable.
-- Never promise cache hits. Keep the actual usage metrics visible in the cost popover.
+- Build shared project instructions at request time. Include connected folder IDs/names and
+  expose on-demand local tools, rather than a leading block of uploaded project file text.
+- Each tool reads the current file or directory when requested. Existing-file edits require a
+  fresh content hash; file mutations retain recoverable original bytes. Record project identity,
+  instruction revision and tool invocation/results without rewriting past replies.
+- Preserve historical processed project records, originals and recorded versions for existing
+  message provenance, migration, backup and GC ownership. Do not include them in new requests.
+  Message attachments still use the attachment conversion pipeline.
+- Local commands have cancellation, bounded runtime/output and durable invocation receipts to
+  prevent duplicate mutations after interruption. Reload never automatically reruns a command.
+- Keep the final wire within Anthropic's four cache breakpoints. The original uploaded-project
+  block rule is historical: current live folder connections add no synthetic file prefix.
+  Test actual instruction, selected-skill, attachment and history breakpoint placement.
+- Instruction edits change the next request prefix. Never promise cache hits; keep actual usage
+  metrics visible in the cost popover.
 
 ### Local access and credentials
 
@@ -156,10 +178,10 @@ Image and transcription credentials must be server-side when configured later.
 | Milestone | Deliverable | Depends on |
 | --- | --- | --- |
 | M1 | Local Claude shell, access boundary, per-chat controls, removals, theme | none |
-| M2 | Projects with shared instructions and files | M1 |
+| M2 | Projects with shared instructions and live Mac file/terminal tools | M1 |
 | M3 | Disk persistence, startup gate, recovery and backup | M1; absorb M2 fields before closing |
 | M4 | Attention states, ask_user, turn navigator | M1; final persistence needs M3 |
-| M5 | Hosted tools, sandbox policy and generated files | probe right after M1; complete with M2/M4 |
+| M5 | Native search/fetch, history and generated-file ownership | probe right after M1; complete with M2/M4 |
 
 Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
 
@@ -209,17 +231,19 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    - Remove persona avatars and symbols from `dMessageUtils.tsx`, the drawer items and the toolbar.
    - `systemPurposeId` may remain as an inert compatibility field.
 7. **Layout.**
-   - Optima becomes Sidebar | Conversation.
-   - Hide `DesktopNav`. Fold the needed rail items (Settings) into `ChatDrawer`.
+   - Optima becomes Rail | Sidebar | Conversation on desktop, Sidebar | Conversation on mobile.
+   - Retain the compact functional rail from the supplied ChatGPT/Codex reference. Settings lives
+     in the desktop rail; mobile keeps Settings in the sidebar. No dummy navigation.
    - Move the retained `ChatPane` actions (export, archive, delete, cost) into a conversation menu.
    - One pane only: remove the split openers and shortcuts.
    - Center the list and composer at 760-820px.
-   - Quiet user bubbles and open assistant text.
+   - Content-width user bubbles and open, left-aligned assistant text. Show the model only in the
+     top selector. Keep space below the toolbar and consistent conversation/composer alignment.
    - Floating composer with attach, mic and send/stop. Retained toggles go in a compact menu.
 8. **Theme.**
    - Force dark (`ProviderTheming`).
-   - Palette: `#141421`, `#1c1b30`, `#efeaf7`, `#f47bb8`, `#79dce8`, `#a891ee`, on Inter and
-     JetBrains Mono.
+   - Use Sector 7 brand-board colors: deep night `#060F14`, Mako `#00FFB3`, violet `#A855F7`,
+     quiet slate surfaces and light text, on Inter and JetBrains Mono.
    - One shell gradient; neon only on selection, focus and activity.
    - Fix hardcoded light colors only on retained surfaces: dialogs, code, tool output,
      attachments, menus.
@@ -234,7 +258,8 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
 
 **M1 acceptance:**
 
-- Opens straight into a dark chat. No login, personas, Call, Beam, rail or permanent panel.
+- Opens straight into a dark Sector 7 chat with its compact rail. No login, personas, Call, Beam
+  or permanent right panel.
 - Both models stream through Bifrost. All five effort stops serialize correctly on the wire.
 - Two chats keep different model/effort. Changing selection does not affect an in-flight
   request. Stale global parameters never reach the wire.
@@ -245,60 +270,55 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
 - Image mode is honestly unconfigured. Typing works without voice setup.
 - Edit, retry, branch, archive, search, attachments and rendering still work.
 
-### M2: Projects
+### M2: Projects and local coding tools
 
-1. **Store migration.** Extend `DFolder` in place with `instructions`, `fileIds[]` and
-   `revision`. Add a `version` and a `migrate` to the `app-folders` persist config; it has none
-   today.
-   - A chat in several folders belongs to the first folder in display order. Remove the other
-     memberships and show a one-time migration summary. Never delete chats.
-   - Turn projects on by default (`enableFolders` is false today).
-2. **[R2] Storage split.** `app-folders` lives in localStorage, which has a ~5 MB quota. Keep
-   only small metadata there: name, color, instructions, file IDs and revision.
-   - Store file records (processed text, warnings, token estimates) in IndexedDB. Store
-     originals in Dexie under scope `app-projects`, with a new asset type.
-   - DBlob supports only `image`/`audio` today (`dblobs.types.ts:61-63`); add the minimal
-     document type.
-   - M3 later moves all of this to disk.
-3. **UI.** Expandable project rows with nested chats in `ChatDrawer`, replacing the
-   `activeFolderId` filter. A project view shows name, instructions, files and chats.
-   New-chat-in-project. Move/unfile from the chat menu. Changes apply to future requests only.
-4. **Files.** Reuse the attachment pipeline for text, Markdown, JSON, CSV, code, PDF, DOCX and
-   images.
-   - Each record holds a stable ID, a content hash/version, MIME, name, size, extraction
-     status/warnings, processed fragments, and token estimates keyed by `{model, method, version}`.
-   - Limits: 20 files per project and 10 MB per original, or stricter converter limits where
-     they apply.
-   - Show extraction failures and scanned-PDF limits. Do not claim native Anthropic PDF
-     citations.
-5. **Request assembly.** Build the project block at request time, as in Cross-cutting decisions.
-   Record the project ID, instruction revision and file `{id, version}` list in the assistant
-   message generator metadata. Update the duplicate/serialize helpers.
-6. **Context budget.** Before Send, estimate the full input: prefix, history, new attachments,
-   tool overhead and thinking. Reserve the output tokens plus a 10% safety margin of the context
-   window.
-   - Label the result as an estimate. The tokenizer is a tiktoken fallback
-     (`chat.tokens.ts:12-30`), not Claude's.
-   - If the estimate is over budget, stop with an actionable message: no truncation, summary or
-     RAG.
-   - A server context-limit error remains possible and is shown actionably.
-7. **Caching.** Apply the breakpoint rule from Cross-cutting decisions.
-8. **Lifecycle.**
-   - Removing a file stops future inclusion.
-   - Deleting a project unfiles its chats.
-   - A project-scope GC keeps every asset referenced by a live project or by any message's
-     recorded file list. Chat-scope GC never touches `app-projects`.
+1. **Store and migration.** Extend project metadata with shared instructions, revision and local
+   folder registrations. Keep deterministic legacy multi-folder migration: first folder in
+   display order owns the chat, other memberships are removed with a summary, and no chat is
+   deleted. Retain historical uploaded-file records and assets for provenance and recovery.
+2. **Durability.** M3 stores project metadata, connected paths and historical assets on disk.
+   Browser storage is a disposable cache. Connected repositories stay on the Mac and require
+   their own backups/Git; workspace backups contain app-owned records and assets.
+3. **UI.** Expandable project rows contain nested chats. Clicking the closed/open folder icon
+   expands/collapses; ellipsis actions appear on hover/focus and remain usable on touch. The
+   project editor saves name, instructions and connections together. Cancel creates nothing.
+   Add folder opens the native Mac chooser; remove Add files and bulk snapshot controls.
+   Saving a new project opens its first chat and expands the project; editing creates no chat.
+   Retain new-chat-in-project and move/unfile actions. Project titles show no attention count.
+4. **Live file tools.** Register folders persistently and use confined IDs for list/read/search,
+   write/edit/move/recoverable delete. Read current UTF-8 files on demand, with named limits and
+   actionable failures. Existing-file changes require fresh hashes and preserve original bytes
+   and permissions. Keep credentials/Git internals excluded from file tools. Directory operations
+   use terminal tools. The current file-tool limit is 256 KiB; it is not a legacy-asset limit.
+5. **Local terminal.** Run CLI tools, tests and Git on the Mac with process permissions, not a
+   filesystem sandbox. Default timeout is 60 seconds, maximum 300; two jobs and 256 KiB output.
+   Cancel the process group on Stop. Persist invocation identities and recoverable mutation
+   receipts; restarted jobs are interrupted and never automatically replayed. External file
+   changes and abrupt OS-crash descendants remain explicit limits.
+6. **Requests and skills.** Include current project instructions and folder IDs/names on Send.
+   Select existing slash skills from the chosen provider's local folder; snapshot their source,
+   revision and instructions on the user turn. Retry/branch use that snapshot. Referenced skill
+   files use explicit confined package IDs. Selection grants no extra permissions.
+7. **Context and caching.** Estimate instructions, history, new attachments and tool overhead,
+   reserve output plus a 10% safety margin, and label it an estimate. No silent truncation or RAG.
+   Name context/file errors and keep final wire cache-breakpoint coverage. Files are fetched only
+   when requested, not bulk added to the prefix.
+8. **Lifecycle.** Removing a connection stops future access; deleting a project unfiles its chats.
+   Preserve all live/historical project assets through migration, cleanup, backup and recovery.
+   Settle local and question tool invocations before native continuation without changing opaque
+   provider history. Validate abort, revision conflict, restart and duplicate invocation paths.
 
 **M2 acceptance:**
 
-- Create, rename and reorder projects; edit instructions; add and remove files; create and move
-  chats.
-- Project chats always use the current shared context. Plain chats use none.
-- Edits affect the next request; old replies and their recorded versions stay intact.
-- Project files survive a reload in browser storage (disk comes in M3). GC cannot erase project
-  or historically referenced assets.
-- Conversion and context errors name the source file. Nothing is silently dropped.
-- The legacy multi-folder migration is deterministic and keeps all content.
+- Create, rename and reorder projects; edit instructions; connect/remove Mac folders; create and
+  move chats. Actual chooser selection, cancellation and durable reconnect work.
+- Project chats use current shared instructions and on-demand files; plain chats use none.
+- Both models complete list/read/hash-checked edit/local CLI and subsequent native continuation.
+  Existing replies, historical versions and saved skill snapshots stay intact.
+- Projects and connections survive disk reload/restart. Live/historical GC ownership holds;
+  backup does not imply backup of connected repositories.
+- Stop/reload/restart never silently repeats mutations. Failures name their source and limits.
+- Legacy multi-folder/upload migration is deterministic and retains all content.
 
 ### M3: Disk as the durable store
 
@@ -314,15 +334,19 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    - Flush immediately on terminal replies and edits. Register an `addFlusher` for tab handover.
 3. **Server commit.** Validate the schema, the expected `revision` and safe IDs.
    - Write to a temp file, fsync, rename; keep `workspace.last-good.json` and its assets.
-   - A stale revision gets rejected. The client shows reload/recover; there is no
-     last-writer-wins.
-   - A save is confirmed only after commit. Show errors with retry.
+   - Reject stale revisions and pause editing/new requests. Keep the live tab, offer a manual
+     recovery copy of unsaved records/originals and an explicit saved-workspace reload after
+     active work settles. Retry only temporary failures; never silently overwrite or auto-merge.
+   - Confirm saves only after commit. Last saved advances only on acknowledgement.
+   - Serialize route bundles and Node processes with the permanent per-directory kernel lock;
+     process death releases it. Keep bounded acquisition and actionable busy errors.
 4. **Assets.**
    - Add raw binary routes at `app/api/local/assets/[id]/route.ts` with `runtime='nodejs'`.
    - IDs are validated against a fixed charset and never contain a path.
    - Write-through on DBlob put/delete. Dexie becomes a disposable read cache.
    - Revive `Date` fields explicitly.
-   - Assets commit before any manifest refers to them.
+   - Assets commit before any manifest refers to them. Stream asset downloads and bound actual
+     upload bytes; preserve legitimate legacy assets above 10 MiB.
    - Deletion of unreferenced assets runs only after a consistent commit, and protects current,
      last-good and historical references.
 5. **Startup gate.** Add a provider under `ProviderSingleTab` and before `ProviderBootstrapLogic`
@@ -342,9 +366,11 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    - Restore: unpack into a staging directory, validate versions and references, keep a recovery
      copy, swap atomically, rehydrate.
    - Never `localStorage.clear()` and never erase the active directory first.
-   - **[R2]** No zip library is in `package.json`. Add one narrow dependency (for example
-     `fflate`) or stream a directory archive server-side. Decide during M3; it is a routine
-     choice.
+   - Bound actual streamed requests and decompression before full allocation. Export/import
+     share a 250 MiB archive bound, including ZIP headers; enforce 10,000 entries, checksums,
+     actual decoded sizes and unique expected paths. Existing implementation uses `fflate`.
+   - Keep the manual unsaved-recovery JSON distinct from normal ZIP restore; do not promise an
+     automatic merge or that this copy can be restored through the ZIP control.
 8. **Exports.** Keep per-chat Markdown/JSON export and legacy big-AGI import. DataAtRestV1 and
    Flash Backup are not used for durable data. Import never restores model credentials.
 9. **Settings.** Show the last confirmed save, errors, the data location and backup/restore. On
@@ -356,7 +382,9 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
   clean browser profile.
 - Empty startup, network errors or corrupt primary data never overwrite a valid workspace.
 - Asset-first restore, Date revival and GC protection hold, with no dangling references.
-- Stale revisions and save failures are visible. "Last saved" is accurate.
+- Stale revisions pause new work and offer recovery/reload; temporary save failures allow retry.
+  "Last saved" advances only after acknowledgement. Competing processes preserve the winning
+  revision/asset, and killed owners release locks. Oversized inputs fail before full allocation.
 - Backup/restore includes empty projects and binary assets, without keys or incognito data.
 - Browser migration runs once and keeps browser data if the first disk write fails.
 
@@ -370,9 +398,12 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    `lastOutcome` (`ok | error | stopped | interrupted`) and `pendingQuestion` records.
    - Precedence: Working > Needs your answer > Failed/Interrupted > Unread > idle.
    - Failed clears on view. A question clears only on answer or dismiss.
-   - Projects aggregate counts.
+   - Keep indicators on individual chats; project title attention counts were removed by user
+     request. Hide the purple unread dot for the selected chat while keeping other states visible.
 3. **Read detection.** A reply counts as seen only when its end is in view and the document is
-   visible and focused. Add Mark read. Retry, edit, branch and import normalize attention.
+   visible and focused. Use a reply-end sentinel within the actual scroll/clipping viewport,
+   excluding composer overlap and covering dialogs. Add Mark read. Retry, edit, branch and import
+   normalize attention.
 4. **`ask_user_question` tool.**
    - Declare one optional function through the existing `tools` option on the AIX call
      (`aix.client.ts:246-247`).
@@ -393,7 +424,11 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    - Persist the answer first, then generate a **new** assistant message.
    - Debounce duplicate answers.
    - If a save fails, keep the question pending and offer retry.
-   - After a reload with a saved answer, offer Continue; never auto-run.
+   - After a reload with a saved answer, offer Continue; never auto-run. Hide Dismiss when every
+     answer is saved. Preserve Composer attachments/skills/references for the later message and
+     clear answer text only after acknowledged saving if it still matches the submitted answer.
+   - Export/import and hydration reconstruct validated invocation/result identities. Reject
+     ambiguous imports before interrupting the existing chat; terminal results stay terminal.
 7. **Dismiss and guards.**
    - Dismiss writes an error `tool_response` ("dismissed by user") and does not generate.
    - Block model changes while a question is pending.
@@ -410,54 +445,66 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
    - An IntersectionObserver tracks the current turn.
    - Call `setStickToBottom(false)` before jumping. Jump to latest stays.
    - Bucket ticks when there are more turns than available height / 4 px.
-   - On touch, show a tap-to-open turn list.
+   - On touch, show a tap-to-open turn list. Keep first/latest inclusion and exact all-turn access
+     when buckets group turns. Scope observers/anchors to the conversation, restore menu focus
+     before jumping, and rebuild anchors after Cleanup mode.
 
 **M4 acceptance:**
 
 - Several chats show their true phase while you navigate. Text and image completion, error and
   stop all clear it.
-- A background completion stays Unread until actually viewed or marked read.
+- A background completion stays Unread until its reply end is actually visible or marked read.
+  Other chats retain purple unread dots; the selected chat suppresses its dot.
 - Questions persist across viewing and reload, and clear only through a paired answer or dismiss.
 - Both models complete a question/answer round trip and a following ordinary message with no
   orphan tool calls.
 - The navigator jumps top/middle/latest without being pulled down while streaming.
-- Keyboard and touch targets are usable and do not cover text.
+- Keyboard and touch targets are usable and do not cover text. Dense history, streaming jumps,
+  compact views, Cleanup toggles and stored unread geometry require direct browser evidence.
 
-### M5: Hosted tools and generated files
+### M5: Native tools and generated files
 
-1. **Probe right after M1.** Make bounded live calls through the app's Messages route for both
-   models, in this order: plain chat, then search, fetch and code each alone, then
-   `ask_user_question` alongside hosted tools. Record results without credentials. No direct
-   Anthropic fallback.
-2. **Exact versions:**
-   - Tools: `web_search_20260318` and `web_fetch_20260318` (dynamic); `web_search_20250305` and
-     `web_fetch_20250910`; `code_execution_20260120`.
-   - Beta headers: `code-execution-2025-08-25`, `files-api-2025-04-14`,
-     `thinking-binding-controls-2026-08-01` (`anthropic.access.ts:174-204`).
-   - Also check cache controls and usage reporting.
-   - Leave Skills and tool search disabled.
-3. **Tool UI.** Reuse the existing toggles, parsers, citations and result renderers as compact
-   per-chat toggles, off by default. An unsupported capability gives an actionable gateway error.
-4. **Container policy.** Add `antContainerPolicy: 'reuse-linear' | 'fresh'` next to
-   `antContainerId` (`aix.client.ts:241,325-327`). A missing ID is not a reset, because it
-   triggers the history scan.
-   - Use `fresh` for retry, edit-regenerate, branch and model change.
-   - Use `reuse-linear` for a new head turn and the ask-user continuation.
-   - Historical handles and links stay in the transcript.
-5. **Files.** Metadata, content and delete go through the M1 access guard.
-   - Keep the 10 MB download cap and name it in errors.
-   - Save downloaded artifacts as local assets. Mark not-yet-downloaded artifacts as remote-only.
-   - Expired files get a clear message.
-6. **Lifecycle.** Verify stop, error and `pause_turn` continuation. No reattach after a browser
-   disconnect. Record any unsupported route or version, and which acceptance item it blocks.
+1. **Gateway evidence.** Make bounded live calls through the app's Bifrost Messages route for
+   both models: ordinary chat, native search/fetch and questions alongside enabled tools. Record
+   results without credentials. No direct Anthropic fallback. Recorded both-model search and
+   local tool loops establish bounded protocol evidence, not every browser lifecycle path.
+2. **Capabilities and versions.** Supported basic native tools are `web_search_20250305` and
+   `web_fetch_20250910`. Dynamic 20260318 versions remain unset. Hosted
+   `code_execution_20260120` is unsupported on this gateway; record its restriction honestly
+   without requiring enabled hosted execution. Any later gateway/container support needs fresh
+   live qualification, including its beta headers, cache controls and usage reporting.
+3. **Tool UI and history.** Search defaults on; fetch remains off unless selected. Existing local
+   slash skills remain available separately from hosted Skills/tool search. Preserve complete
+   ordered native content, citations, encrypted/unknown fields and appended client answers.
+   Replay only compatible provider/deployment/model history. Hide detailed calls by default;
+   Settings > Conversation > Show all tool calls reveals saved inputs/results without rerunning.
+   Keep one contextual neon activity line and muted completed summaries, with distinct
+   failed/stopped/incomplete labels. Questions, errors, citations and resources remain visible.
+4. **Historical container safety.** Retain fresh-versus-linear policy for legacy histories and
+   future qualified hosted execution: retry/edit/branch/model change never reuse mutated
+   containers; ordinary head turns and question continuation may reuse compatible linear state.
+   Existing handles stay in transcripts. No current enabled-container success is claimed.
+5. **Original files.** Metadata/content/delete use the M1 access guard. Keep the named 10 MiB
+   hosted-download cap, distinct from legitimate larger legacy local assets. Persist original
+   bytes with explicit provider/deployment identity and durable ownership before transforming,
+   inlining, replacing a remote reference or deleting the upstream original. Keep previews
+   separate and protect live/historical/recovery owners through GC and backup/restore.
+   Remote-only or expired files get actionable messages. Do not claim this acceptance complete
+   merely because unavailable hosted execution limits current exposure.
+6. **Lifecycle.** Verify stop, error, bounded `pause_turn` follow-ups, following ordinary messages,
+   reload/history and compatible question/local-tool settlement. No reattach or automatic
+   replay after disconnect. Record unsupported routes separately from enabled capabilities.
 
 **M5 acceptance:**
 
-- Live evidence for each enabled capability on both models, including question plus hosted tools.
-- Citations and tool results render and persist. Downloaded artifacts restore from disk.
-- Retries and branches never rejoin a mutated container.
-- Gateway restrictions and capped or expired downloads produce actionable errors, not false
-  success.
+- Live evidence for each enabled capability on both models, including questions plus native and
+  local tools. Offline fixtures alone do not prove gateway or browser acceptance.
+- Citations/native tool history render and persist unchanged. Tool-display settings affect only
+  projection. Completed summaries survive restart and retain citations/resources.
+- Downloaded original artifacts retain source identity and ownership through inline replacement,
+  remote expiry, deletion, disk reload and backup/restore; transformed previews are separate.
+- Legacy/future container retry/branch safety remains covered without claiming current hosted
+  execution support. Gateway restrictions and capped/expired files produce actionable errors.
 
 ## Verification
 
@@ -472,15 +519,19 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
   - **M1:** access guard (client host + server key rejected, for generation, list and files);
     model/dialect allowlist; middleware Host/Origin matrix; static catalog with no network call;
     per-chat replacement params on the wire; cross-model reasoning filter.
-  - **M2:** instruction layering; date-only prompt stability; folder migration; file version
-    recording; context budget; breakpoint placement and the cap; project GC ownership.
-  - **M3:** envelope encode/decode including Dates; atomic write and last-good recovery on a temp
-    directory; stale revision; corruption; asset ordering; idempotent merge; one-time migration;
-    backup/restore without credentials or incognito data.
-  - **M4:** attention reducer and visibility; question schema validation; the
-    `tool_use`/`tool_result` wire sequence; duplicate-answer guard; strip exemption for pending
-    turns.
-  - **M5:** container policy, fresh versus reuse.
+  - **M2:** instruction layering/date stability; legacy folder/upload migration and historical
+    file ownership; Mac chooser; current file/hash edits and recoverable mutations; local command
+    cancellation/restart/duplicate receipts; provider-filtered skill snapshots; context estimate
+    and final-wire breakpoint cap.
+  - **M3:** envelope/Date round trips; atomic disk/last-good recovery; actual child-process locks
+    and immutable asset conflicts; classified stale-save recovery; bounded chunked routes, asset
+    streaming and ZIP integrity/limits; idempotent merge/migration; backup without secrets or
+    incognito data.
+  - **M4:** attention/reply-end geometry; question schema and actual dispatcher; invocation/result
+    export/import/hydration; duplicate answers, save rollback and Composer drafts; pending-turn
+    strip exemption; conversation-scoped navigator buckets/keyboard.
+  - **M5:** native history/citation/replay, original artifact source/ownership and transformation;
+    tool-display projection and persisted summaries; legacy container fresh-versus-reuse policy.
 - **Browser QA** on a user-started server: desktop and narrow layouts, focus and reduced motion,
   long text/code/citations, menus, attachments, search, edit/retry/branch/archive, projects, mic
   states, the image unconfigured state, scrolling while streaming, two running chats, a pending
@@ -490,32 +541,54 @@ Run the M5 step 1 probe right after M1, so gateway restrictions are known early.
 
 ## Repository workflow
 
-- Before implementation, commit the planning docs (this file, the revised plan, the review and
-  both analysis docs) on `feat/neon-tokyo-chat-plan`, with approval. They are currently
-  untracked on `main`.
-- Implement on `feat/neon-tokyo-chat`. When creating a manual worktree, put it under
-  `.worktrees/` and **[R2]** add `.worktrees/` to `.gitignore`; it is not there today.
-- No push, fork, PR or merge is part of this plan.
-- On completion: update the README/setup and the data/backup docs, and write
-  `docs/change_details/<date>-neon-tokyo-chat.md`. Replace the planned items only when all
-  milestones are complete or the scope is explicitly revised.
+- The authoritative checkout is `/Users/adriaan.van.erps/Code/sector-7` on `main`, private
+  `AdriaanVE/sector-7`. Original planning/implementation branches and the AI GUI checkout are
+  historical context, not the current source or publication destination.
+- Current user authorization covers in-scope commits and pushes on main, with no PR required.
+  It supersedes obsolete no-push wording in the original plan/repository guidance. Do not move
+  the existing `v0.1.0` tag or merge. Stage explicit changed paths and preserve unrelated work.
+- When a worktree is needed, place it under `.worktrees/` and ensure it is gitignored.
+- Update README/setup, release/data/backup docs and `docs/change_details/<date>-<scope>.md` for
+  verified changes. The 0.1.0 source preview is already published; later work is additive on main.
+- Keep this plan in progress. Move planned items only after all acceptance is directly verified
+  or the user explicitly revises scope. Commit/push/build/review evidence is not broad acceptance.
 
 ## Human calls (resolved)
 
-Approved 2026-10-03: append edited/imported instructions, keep browser dictation with the Google notice, keep automatic extras with Settings controls using Sonnet 5.5 medium.
+Approved 2026-10-03:
 
-1. **Edited chat instructions:** an explicitly edited or imported chat system message is
-   **appended** as the final layer (proposed) or **replaces** the personal and project layers.
-   This blocks the final instruction-builder semantics and tests (M1/M2).
-2. **Dictation until a voice model is chosen:** keep Chrome's Web Speech, which sends audio to
-   Google (proposed: keep it, with a one-line notice in Settings), or leave the microphone
-   unconfigured. This only blocks active dictation behavior.
-3. **AI extras (resolved):** User chose to keep automatic extras with Settings controls, using Sonnet 5.5 medium. Original alternatives: keep auto-title plus the explicit code fixup and image helpers, and remove
-   automatic follow-ups, diagram/HTML UI suggestions and attachment prompt suggestions
-   (proposed), or keep those extras. This blocks the final pruning of those entry points.
+1. Append explicitly edited/imported chat instructions after neutral, personal and project layers.
+2. Keep Chrome Web Speech dictation with the Settings notice that audio goes to Google. Dedicated
+   voice-model selection remains deferred.
+3. Keep automatic AI extras with Settings controls, using Sonnet 5.5 medium and tool-free utility
+   requests.
 
-Image and voice model selection and the richer Tokyo styling are later work. They do not block
-these milestones.
+Later decisions add live Mac folder/file/terminal tools, native search defaults, local slash
+skills, Sector 7 branding and ChatGPT/Codex rail geometry, compact tool display and main
+publication. OpenAI adapters, image/voice model connections and further daily-use visuals remain
+in [sector-7-later.md](sector-7-later.md), outside current implementation acceptance.
+
+## Current evidence and remaining acceptance
+
+Source was reconciled at main `a7d9b1f3ea7c9ebd8115dda2beded33c4cd8460f`. The
+[acceptance audit](../../../.ship/current-acceptance-audit.md) inspected an earlier HEAD and
+working tree; subsequent [change records](../../change_details/) establish newer reviewed
+storage bounds/conflict recovery, question reconstruction/composer recovery, completed tool
+summaries and reply-end/navigator source fixes. Read their reported checks as historical evidence,
+not fresh verification by this document edit. Latest navigation record reports 148 offline
+passes, 22 credential-dependent skips, types/source lint, production build and first/middle/latest
+browser jumps. Skips and pure tests do not prove live acceptance.
+
+M3/M4/M5 remain open. Required direct evidence includes clean-profile and server-restart recovery,
+stale/multiple-profile and migration/backup lifecycle, both-model question/answer/following-message
+and mixed-tool/Stop/reload/import paths, dense/streaming/compact/touch/Cleanup navigation and unread
+geometry. Original generated-resource source identity/ownership remains an implementation and
+verification gap at this source. Native chooser durable reconnect and full React local-tool
+Stop/restart acceptance remain bounded. Track later fixes against the current source rather than
+reopening defects already addressed by the newer change records.
+
+The following checkpoints preserve the original development sequence. Their old pending-review,
+source-path and feature-default wording is historical where these active sections supersede it.
 
 ## Storage/question correction checkpoint, 2026-10-03
 
