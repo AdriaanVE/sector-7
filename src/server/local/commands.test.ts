@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalCommandManager, CommandResult } from './commands';
 
@@ -229,4 +229,46 @@ test('SIGTERM-resistant commands are force-killed within the cancellation grace'
     assert.equal(result.status, 'cancelled'); assert.equal(result.signal, 'SIGKILL');
     assert.ok(Date.now() - cancellation < 1500);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('command HTTP route runs in a default skill folder without a project and rejects tampered or unsaved calls', async () => {
+  const { POST } = await import('../../../app/api/local/commands/route');
+  const { POST: folderPost } = await import('../../../app/api/local/folders/route');
+  const { emptyWorkspace } = await import('~/common/personal/workspace-schema');
+  const { commitWorkspace } = await import('./workspace');
+  const { create_FunctionCallInvocation_ContentFragment } = await import('~/common/stores/chat/chat.fragments');
+  const { createDMessageFromFragments } = await import('~/common/stores/chat/chat.message');
+  const directory = await mkdtemp(join(tmpdir(), 'sector7-default-command-'));
+  const previous = process.env.AI_GUI_DATA_DIR; process.env.AI_GUI_DATA_DIR = directory;
+  try {
+    const workspace = emptyWorkspace();
+    const message = createDMessageFromFragments('assistant', [create_FunctionCallInvocation_ContentFragment('default-call', 'local_command', JSON.stringify({ folder_id: 'local-codex', command: 'pwd' }))]);
+    message.fragments.push(create_FunctionCallInvocation_ContentFragment('default-list', 'folder_list', JSON.stringify({ folder_id: 'local-codex', path: '' })));
+    workspace.stores['app-chats'] = { version: 5, state: { conversations: [{ id: 'chat', messages: [message], created: 0, updated: null, tokenCount: 0, systemPurposeId: '' }] } };
+    await commitWorkspace(workspace, 0, directory);
+    const listing = await folderPost(new Request('http://127.0.0.1:3004/api/local/folders', { method: 'POST', headers: { host: '127.0.0.1:3004', 'content-type': 'application/json' }, body: JSON.stringify({ conversationId: 'chat', invocationId: 'default-list', input: { name: 'folder_list', folder_id: 'local-codex', path: '' } }) }));
+    assert.equal(listing.status, 200);
+    assert.ok(Array.isArray((await listing.json()).entries));
+    const identity = { conversationId: 'chat', folderId: 'local-codex', invocationId: 'default-call' };
+    const request = (body: object) => new Request('http://127.0.0.1:3004/api/local/commands', { method: 'POST', headers: { host: '127.0.0.1:3004', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal((await POST(request({ ...identity, action: 'start', command: 'false' }))).status, 409);
+    for (const tamper of [{ conversationId: 'other' }, { invocationId: 'unsaved' }, { folderId: 'unknown' }])
+      assert.equal((await POST(request({ ...identity, ...tamper, action: 'start', command: 'pwd' }))).status, 403);
+    const response = await POST(request({ ...identity, action: 'start', command: 'pwd' }));
+    assert.equal(response.status, 200);
+    let job = await response.json();
+    const initialJobId = job.jobId;
+    for (let count = 0; job.status === 'running' && count < 100; count++) {
+      await sleep(20);
+      job = await (await POST(request({ ...identity, action: 'poll', jobId: job.jobId }))).json();
+    }
+    assert.equal(job.status, 'succeeded');
+    assert.equal(job.chunks.map((chunk: { text: string }) => chunk.text).join('').trim(), await realpath(join(homedir(), '.codex')));
+    const replay = await (await POST(request({ ...identity, action: 'start', command: 'pwd' }))).json();
+    assert.equal(replay.jobId, initialJobId);
+    assert.equal(replay.status, 'succeeded');
+  } finally {
+    if (previous === undefined) delete process.env.AI_GUI_DATA_DIR; else process.env.AI_GUI_DATA_DIR = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
 });

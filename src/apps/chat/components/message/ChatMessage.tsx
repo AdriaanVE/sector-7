@@ -1,5 +1,5 @@
 import { usePersonalSettings } from '~/common/personal/store-personal-settings';
-import { toolDisplayFragments } from '~/common/personal/tool-display';
+import { completedToolSummary, hasVisibleAnswer, toolDisplayFragments } from '~/common/personal/tool-display';
 import { ChatToolSummary } from '~/common/personal/ChatToolSummary';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -378,6 +378,7 @@ export function ChatMessage(props: {
   const [opsMenuAnchor, setOpsMenuAnchor] = React.useState<HTMLElement | null>(null);
   const [textContentEditState, setTextContentEditState] = React.useState<ChatMessageTextPartEditState | null>(null);
   const [showInfoModal, setShowInfoModal] = React.useState(false);
+  const [showToolReasoning, setShowToolReasoning] = React.useState(false);
   const attachmentsEditRef = React.useRef<EditModeAttachmentsHandle>(null);
 
   // latest-message ref: lets stable callbacks read the current message without putting it in deps
@@ -421,6 +422,9 @@ export function ChatMessage(props: {
 
   const showToolCalls = usePersonalSettings(state => state.showToolCalls);
   const displayedFragments = React.useMemo(() => toolDisplayFragments(messageFragments, showToolCalls, props.hideActivityPlaceholder), [messageFragments, props.hideActivityPlaceholder, showToolCalls]);
+  const isToolOnly = fromAssistant && !showToolCalls && !textContentEditState && !messageGenerator?.upstreamHandle && !msgGenOutOfTokens
+    && !hasVisibleAnswer(displayedFragments) && !!completedToolSummary(messageFragments, false, !!messagePendingIncomplete || !!props.hideActivityPlaceholder, messageGenerator?.nativeHistory);
+  const hasToolReasoning = displayedFragments.some(fragment => fragment.ft === 'void' && fragment.part.pt === 'ma' && (!!fragment.part.aText || !!fragment.part.redactedData?.length));
 
   const {
     annotationFragments,    // Web Citations, References (rendered at top)
@@ -835,7 +839,7 @@ export function ChatMessage(props: {
     // style
     backgroundColor,
     px: { xs: 1, md: themeScalingMap[adjContentScaling]?.chatMessagePadding ?? 2 },
-    py: 1.5,
+    py: isToolOnly ? 0.25 : 1.5,
     // filter: 'url(#agi-futuristic-glow)',
 
     '& .menu-button': { opacity: 0 },
@@ -885,7 +889,7 @@ export function ChatMessage(props: {
     display: 'block', // this is Needed, otherwise there will be a horizontal overflow
 
     ...props.sx,
-  }), [adjContentScaling, backgroundColor, isEditingText, isUserMessageSkipped, isUserStarred, isVndAndCacheAuto, isVndAndCacheUser, props.sx, uiComplexityMode]);
+  }), [adjContentScaling, backgroundColor, isEditingText, isToolOnly, isUserMessageSkipped, isUserStarred, isVndAndCacheAuto, isVndAndCacheUser, props.sx, uiComplexityMode]);
 
 
   // avatar icon & label & tooltip
@@ -918,7 +922,7 @@ export function ChatMessage(props: {
 
 
       {/* Mobile: Compact sticky header (tap avatar/label area to scroll message into view) */}
-      {props.isMobile && !props.hideAvatar && (
+      {props.isMobile && !props.hideAvatar && !isToolOnly && (
         <CMMobileHeader
           icon={fromUser ? null : messageAvatarIcon}
           label={null}
@@ -987,6 +991,7 @@ export function ChatMessage(props: {
         {/* V-Fragments: Image Attachments | Content | Doc Attachments */}
         <Box ref={blocksRendererRef /* restricts the BUBBLE menu to the children of this */} sx={{
           ...fragmentsListSx,
+          ...(isToolOnly && { gap: 0, my: 0 }),
           ...(fromUser && !isEditingText && {
             flexGrow: 0, width: 'fit-content', maxWidth: { xs: '92%', md: '78%' }, ml: 'auto',
             bgcolor: '#0F2A2A', border: '1px solid rgba(0, 255, 179, .2)',
@@ -996,7 +1001,7 @@ export function ChatMessage(props: {
           }),
         }}>
 
-          {!props.isMobile && fromAssistant && !props.hideAvatar && !isEditingText && (
+          {!props.isMobile && fromAssistant && !props.hideAvatar && !isEditingText && !isToolOnly && (
             <CMDesktopAvatar
               horizontal icon={messageAvatarIcon} label={null} tooltip={null}
               zenMode={zenMode} pending={!!messagePendingIncomplete} menuOpen={!!opsMenuAnchor} menuColor={avatarMenuColor}
@@ -1049,11 +1054,19 @@ export function ChatMessage(props: {
           )}
 
           {fromAssistant && !isEditingText && (
-            <ChatToolSummary fragments={messageFragments} nativeHistory={messageGenerator?.nativeHistory} showAll={showToolCalls} pending={!!messagePendingIncomplete || !!props.hideActivityPlaceholder} />
+            <ChatToolSummary fragments={messageFragments} nativeHistory={messageGenerator?.nativeHistory} showAll={showToolCalls} pending={!!messagePendingIncomplete || !!props.hideActivityPlaceholder} compact={isToolOnly}>
+              {isToolOnly && hasToolReasoning && <Button size='sm' variant='plain' color='neutral' aria-expanded={showToolReasoning} onClick={() => setShowToolReasoning(value => !value)} sx={{ minHeight: 28, py: 0, px: 0.75, fontSize: 'xs', flexShrink: 0 }}>
+                {showToolReasoning ? 'Hide reasoning' : 'Reasoning'}
+              </Button>}
+              {isToolOnly && !props.hideAvatar && <IconButton className='menu-button' size='sm' variant={opsMenuAnchor ? 'soft' : 'plain'} aria-label='Message actions' aria-expanded={!!opsMenuAnchor} onClick={handleAvatarClick} onContextMenu={handleOpsMenuToggle} sx={{ '--IconButton-size': '28px', flexShrink: 0 }}>
+                <MoreVertIcon sx={{ fontSize: 16 }} />
+              </IconButton>}
+            </ChatToolSummary>
           )}
 
           {/* Interleaved Fragments (reasoning + content in temporal order) */}
-          <ContentFragments
+          {(!isToolOnly || showToolReasoning) && <ContentFragments
+            reasoningExpanded={isToolOnly ? showToolReasoning : undefined}
             contentFragments={renderInterleavedFragments}
             showEmptyNotice={!messageFragments.length && !messagePendingIncomplete}
 
@@ -1082,7 +1095,7 @@ export function ChatMessage(props: {
             onMessageDelete={!onMessageDelete ? undefined : handleMessageDelete}
 
             onDoubleClick={(onMessageFragmentReplace /*&& doubleClickToEdit disabled, as we may have shift too */) ? handleBlocksDoubleClick : undefined}
-          />
+          />}
 
           {/* [#1114] Resolve Vertex AI grounding redirect links in place */}
           {vertexLinksCount >= 1 && !messagePendingIncomplete && !isEditingText && !!onMessageFragmentReplace && (
@@ -1164,7 +1177,7 @@ export function ChatMessage(props: {
           {/*  </Typography>*/}
           {/*)}*/}
 
-          {fromAssistant && !messagePendingIncomplete && !isEditingText && <Box component='span' data-reply-end={messageId} aria-hidden='true' sx={{ display: 'block', height: '1px', width: '1px', pointerEvents: 'none' }} />}
+          {fromAssistant && !messagePendingIncomplete && !isEditingText && <Box component='span' data-reply-end={messageId} aria-hidden='true' sx={{ display: 'block', height: isToolOnly ? 0 : '1px', width: '1px', pointerEvents: 'none' }} />}
 
         </Box>
 

@@ -54,6 +54,7 @@ export function ContentFragments(props: {
 
   contentFragments: InterleavedFragment[]
   showEmptyNotice: boolean,
+  reasoningExpanded?: boolean,
 
   contentScaling: ContentScaling,
   uiComplexityMode: UIComplexityMode,
@@ -173,6 +174,7 @@ export function ContentFragments(props: {
                 fitScreen={props.fitScreen}
                 isMobile={props.isMobile}
                 inFlux={inFlux}
+                expanded={props.reasoningExpanded}
                 onFragmentDelete={props.onFragmentDelete}
                 onFragmentReplace={props.onFragmentReplace}
               />

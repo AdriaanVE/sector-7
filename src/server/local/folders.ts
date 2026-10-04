@@ -2,7 +2,8 @@ import { constants } from 'node:fs';
 import { open, realpath, readdir, mkdir, lstat, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { createHash } from 'node:crypto';
-import { connectedFolderSchema, folderToolInput, ConnectedFolder } from '~/common/personal/folder-tools';
+import { homedir } from 'node:os';
+import { connectedFolderSchema, folderToolInput, ConnectedFolder, DEFAULT_LOCAL_FOLDERS } from '~/common/personal/folder-tools';
 import type { Workspace } from '~/common/personal/workspace-schema';
 import { loadWorkspace, dataDirectory, WorkspaceError } from './workspace';
 const FILE_BYTES = 256 * 1024;
@@ -13,7 +14,7 @@ function changePreview(removed: string, added: string) {
   return { removed: removed.slice(0, limit), added: added.slice(0, limit), removed_characters: removed.length, added_characters: added.length, truncated: removed.length > limit || added.length > limit };
 }
 function inside(root: string, target: string) { const rel = relative(root, target); return !isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`); }
-export function excludedFolderPath(path: string) { return path.split('/').some(part => part === '.git' || part === 'node_modules' || part === '.env' || part.startsWith('.env.')) || /(?:^|\/)(?:credentials|secrets?|id_rsa|id_ed25519)(?:\..*)?$|\.(?:pem|key|p12|pfx|keystore)$/i.test(path); }
+export function excludedFolderPath(path: string) { return path.split('/').some(part => part === '.git' || part === 'node_modules' || part === '.env' || part.startsWith('.env.') || part === 'auth.json' || part === '.credentials.json') || /(?:^|\/)(?:credentials|secrets?|id_rsa|id_ed25519)(?:\..*)?$|\.(?:pem|key|p12|pfx|keystore)$/i.test(path); }
 function eligible(path: string) {
   if (isAbsolute(path) || path.includes('\\') || path.includes('\0') || path.split('/').some(part => part === '..') || excludedFolderPath(path)) throw new WorkspaceError('Path is outside the connected folder or contains private credentials or Git internals.', 403);
 }
@@ -23,14 +24,22 @@ export async function validateFolderPath(path: string): Promise<ConnectedFolder>
   if (!(await lstat(root)).isDirectory() || root === sep) throw new WorkspaceError('Choose a directory other than the filesystem root.', 400);
   return connectedFolderSchema.parse({ id: crypto.randomUUID(), name: basename(root), path: root });
 }
-export async function authorizeFolder(projectId: string, conversationId: string, folderId: string, directory = dataDirectory()) {
+export async function authorizeFolder(projectId: string | undefined, conversationId: string, folderId: string, directory = dataDirectory(), homeDirectory = homedir()) {
   const { workspace } = await loadWorkspace(directory);
-  return folderFromWorkspace(workspace, projectId, conversationId, folderId);
+  return resolveLocalFolder(folderFromWorkspace(workspace, projectId, conversationId, folderId, homeDirectory));
 }
-function folderFromWorkspace(workspace: Workspace | null, projectId: string, conversationId: string, folderId: string) {
+async function resolveLocalFolder(folder: ConnectedFolder) {
+  if (!DEFAULT_LOCAL_FOLDERS.some(local => local.id === folder.id)) return folder;
+  await mkdir(folder.path, { recursive: true, mode: 0o700 });
+  return { ...folder, path: await realpath(folder.path) };
+}
+function folderFromWorkspace(workspace: Workspace | null, projectId: string | undefined, conversationId: string, folderId: string, homeDirectory: string) {
   const projects = workspace?.stores['app-folders']?.state.folders;
   const chats = workspace?.stores['app-chats']?.state.conversations;
-  if (!Array.isArray(projects) || !Array.isArray(chats) || !chats.some(chat => chat && typeof chat === 'object' && 'id' in chat && chat.id === conversationId)) throw new WorkspaceError('Save this chat and project before accessing its folder.', 403);
+  if (!Array.isArray(chats) || !chats.some(chat => chat && typeof chat === 'object' && 'id' in chat && chat.id === conversationId)) throw new WorkspaceError('Save this chat before accessing local folders.', 403);
+  const local = DEFAULT_LOCAL_FOLDERS.find(folder => folder.id === folderId);
+  if (local) return { ...local, path: join(homeDirectory, local.name.slice(2)) };
+  if (!Array.isArray(projects)) throw new WorkspaceError('This chat does not belong to the connected project.', 403);
   const project = projects.find(project => project && typeof project === 'object' && 'id' in project && project.id === projectId);
   if (!project || typeof project !== 'object' || !('conversationIds' in project) || !Array.isArray(project.conversationIds) || !project.conversationIds.includes(conversationId) || !('connectedFolders' in project) || !Array.isArray(project.connectedFolders)) throw new WorkspaceError('This chat does not belong to the connected project.', 403);
   const folder = project.connectedFolders.map((value: unknown) => connectedFolderSchema.parse(value)).find((folder: ConnectedFolder) => folder.id === folderId);
@@ -156,10 +165,10 @@ export async function executeFolderTool(folder: ConnectedFolder, value: unknown,
   const result = edits.then(run, run); edits = result.catch(() => undefined); return result;
 }
 
-/** A saved invocation, current project membership and registered root form the local capability. */
-export async function authorizeFolderInvocation(projectId: string, conversationId: string, folderId: string, invocationId: string, expectedName: string, directory = dataDirectory()) {
+/** A saved invocation and a default root or current project connection form the local capability. */
+export async function authorizeFolderInvocation(projectId: string | undefined, conversationId: string, folderId: string, invocationId: string, expectedName: string, directory = dataDirectory(), homeDirectory = homedir()) {
   const { workspace } = await loadWorkspace(directory);
-  const folder = folderFromWorkspace(workspace, projectId, conversationId, folderId);
+  const folder = folderFromWorkspace(workspace, projectId, conversationId, folderId, homeDirectory);
   const chats = workspace?.stores['app-chats']?.state.conversations;
   if (!Array.isArray(chats)) throw new WorkspaceError('Chat is unavailable.', 403);
   const chat = chats.find(chat => chat && typeof chat === 'object' && 'id' in chat && chat.id === conversationId);
@@ -171,7 +180,7 @@ export async function authorizeFolderInvocation(projectId: string, conversationI
       const part = fragment.part;
       if ('pt' in part && part.pt === 'tool_invocation' && 'id' in part && part.id === invocationId && 'invocation' in part && part.invocation && typeof part.invocation === 'object' && 'name' in part.invocation && part.invocation.name === expectedName && 'args' in part.invocation && typeof part.invocation.args === 'string') {
         const args = JSON.parse(part.invocation.args);
-        if (args.folder_id === folderId) return { folder, args, responded: message.fragments.some((fragment: unknown) => fragment && typeof fragment === 'object' && 'part' in fragment && fragment.part && typeof fragment.part === 'object' && 'pt' in fragment.part && fragment.part.pt === 'tool_response' && 'id' in fragment.part && fragment.part.id === invocationId) };
+        if (args.folder_id === folderId) return { folder: await resolveLocalFolder(folder), args, responded: message.fragments.some((fragment: unknown) => fragment && typeof fragment === 'object' && 'part' in fragment && fragment.part && typeof fragment.part === 'object' && 'pt' in fragment.part && fragment.part.pt === 'tool_response' && 'id' in fragment.part && fragment.part.id === invocationId) };
       }
     }
   }
