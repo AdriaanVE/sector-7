@@ -37,7 +37,7 @@ The active plan's settled decisions supersede its historical checkpoints: live M
 
 ## Hosted verification
 
-The previous GitHub Linux run passed installation/types/lint but failed six local command/native picker tests because it lacked the supported macOS environment. CI is being changed to macos-14 with the full checks retained. A successful hosted run is pending; local results do not substitute for it.
+The previous GitHub Linux run passed installation/types/lint but failed six local command/native picker tests because it lacked the supported macOS environment. CI uses macos-14 with the full checks retained. Hosted run 37166206931 at commit 83737ad completed successfully with installation, both type projects, lint and 193 tests passed, 22 credential-dependent skips. This is hosted verification, not browser acceptance.
 
 ## Acceptance sequence
 
