@@ -60,7 +60,7 @@ export function TurnNavigator({ messages, listRef }: {
   const [previewBucket, setPreviewBucket] = React.useState<number | null>(null);
   const [openBucket, setOpenBucket] = React.useState<number | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  const [railSpace, setRailSpace] = React.useState({ height: 240, center: 200 });
+  const [railSpace, setRailSpace] = React.useState<{ height: number; center: number; marginLeft: number | null }>({ height: 240, center: 200, marginLeft: null });
   const railRef = React.useRef<HTMLDivElement>(null);
   const nodesRef = React.useRef(new Map<string, HTMLElement>());
   const jumpFrameRef = React.useRef(0);
@@ -83,7 +83,13 @@ export function TurnNavigator({ messages, listRef }: {
       const availableHeight = Math.max(0, viewport.bottom - viewport.top);
       const height = Math.max(stripeStep, Math.floor(Math.min(availableHeight * .5, availableHeight - 96) / stripeStep) * stripeStep);
       const center = viewport.top - rect.top + availableHeight / 2;
-      setRailSpace(previous => previous.height === height && previous.center === center ? previous : { height, center });
+      // Anchor to the pane edge rather than the centered transcript column.
+      const listPaddingLeft = parseFloat(window.getComputedStyle(list).paddingLeft);
+      const listContentLeft = list.getBoundingClientRect().left + listPaddingLeft;
+      // Keep the 36-pixel target within the reserved gutter on narrow layouts.
+      const inset = Math.min(12, Math.max(0, listPaddingLeft - 36));
+      const marginLeft = viewport.left + inset - listContentLeft;
+      setRailSpace(previous => previous.height === height && previous.center === center && previous.marginLeft === marginLeft ? previous : { height, center, marginLeft });
       if (needsMeasure) {
         positions = ordered.map(({ node }) => {
           const bounds = node.getBoundingClientRect();
@@ -163,7 +169,7 @@ export function TurnNavigator({ messages, listRef }: {
   </MenuItem>);
 
   if (turns.length < 3) return null;
-  return <Box component='li' sx={{ position: 'sticky', top: Math.max(16, railSpace.center - railHeight / 2), height: 0, flexShrink: 0, alignSelf: 'flex-start', width: 36, ml: { xs: '-36px', md: '-40px' }, zIndex: 4, listStyle: 'none', transition: 'top 220ms ease-out', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}>
+  return <Box component='li' sx={{ position: 'sticky', top: Math.max(16, railSpace.center - railHeight / 2), height: 0, flexShrink: 0, alignSelf: 'flex-start', width: 36, ml: `${railSpace.marginLeft ?? 0}px`, visibility: railSpace.marginLeft === null ? 'hidden' : 'visible', zIndex: 4, listStyle: 'none', transition: 'top 220ms ease-out', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}>
     <Box component='nav' aria-label='Conversation turns'>
       <Box sx={{ display: { xs: 'block', md: 'none' }, '@media (pointer: coarse)': { display: 'block' } }}>
         <Dropdown onOpenChange={(_event, open) => setMobileMenuOpen(open)}>

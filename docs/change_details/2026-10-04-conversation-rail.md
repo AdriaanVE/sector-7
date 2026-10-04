@@ -64,6 +64,29 @@ keyboard previews after regrouping. Full-app acceptance remains separate.
 
 The PR contains only the rail changes on current `main`, after the composer PR was merged.
 
+## Pane-edge placement
+
+The desktop stripe rail now sits 12 pixels from the visible chat pane's left edge, next to the sidebar
+divider. Its offset accounts for the centered transcript and list padding, so wider windows
+leave the rail near the divider instead of pulling it toward the chat. Existing viewport
+and resize observation updates its position. The preview follows the rail.
+
+The simplify pass names the list content edge explicitly. In the running demo, the pane's
+left edge was 312 pixels and the rail's left edge 324 pixels; the centered list began at
+458.5 pixels. The user confirmed the new placement in the full app.
+
+Claude approved the positioning calculation and identified two minor issues. The rail now
+stays hidden until its first position measurement, avoiding a misplaced frame on chat open.
+The inset caps at the list padding minus the 36-pixel target width, keeping mobile tap targets
+inside the reserved gutter (4-pixel inset with 40-pixel padding).
+
+The read-only Claude follow-up approved both corrections with no concrete introduced
+regressions. Live desktop measurement retains 312/324-pixel pane/rail edges. At 360 pixels,
+the rail starts at 4 pixels, its target ends at the 40-pixel content edge, and horizontal
+overflow is zero. The final Node 22 quality gate passes: 229 tests, 22 vendor skips, plus
+types, full lint and whitespace. Claude did not run browser tests. Pinch-zoom panning,
+RTL and OS accessibility rendering remain outside this placement verification.
+
 ## Compact preview adjustment
 
 The hover card is 272 pixels wide with 12-pixel padding, 13/12-pixel prompt/reply text and
