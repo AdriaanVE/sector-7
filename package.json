@@ -27,7 +27,11 @@
     "vercel:env:pull": "npx vercel env pull .env.development.local",
     "sharp:win32_x64": "npm install --os=win32 --cpu=x64 sharp",
     "dev:local": "npm run predev && node tools/local/launch.mjs dev",
-    "start:local": "node tools/local/launch.mjs start"
+    "start:local": "node tools/local/launch.mjs start",
+    "desktop:setup": "npm ci --prefix desktop",
+    "desktop:build": "node desktop/scripts/build-mac.mjs",
+    "desktop:install": "node desktop/scripts/install-mac.mjs",
+    "desktop:check": "npm run check --prefix desktop && npm test --prefix desktop"
   },
   "prisma": {
     "schema": "src/server/prisma/schema.prisma"

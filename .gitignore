@@ -72,3 +72,14 @@ yarn-error.log*
 
 # Release source configuration example
 !.env.example
+
+# Electron dependencies, staged server and local installs
+/desktop/node_modules/
+/desktop/.stage/
+/desktop/.stage-*/
+/desktop/out/
+/desktop/local/
+/desktop/local-*/
+
+# Desktop dependency link in local worktrees
+/desktop/node_modules

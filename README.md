@@ -1,58 +1,172 @@
 # Sector 7
 
-Personal local Claude workspace, built by remodeling the MIT-licensed [big-AGI](https://github.com/enricoros/big-AGI) application. The name references Final Fantasy VII. Sector 7 is an independent personal project.
+A local AI workspace for macOS, built from the MIT-licensed [big-AGI](https://github.com/enricoros/big-AGI). Sector 7 combines Claude chat, projects, on-demand file access and terminal tools in a dark, Mako-green interface. The name references Final Fantasy VII; this is an independent personal project.
 
-Version **0.1.0** is an early working preview. It keeps big-AGI's Next.js, React, Joy UI, Zustand and AIX engine, with a simpler chat layout and deep-night and mako-green styling based on the Sector 7 brand board.
+![Sector 7 chat interface](docs/sector-7.png)
 
-## Start on your Mac
+Version **0.1.0** is a working preview. Run it in a browser with a local server, or build the Electron app for Apple silicon. Both use the same disk-backed workspace and server-configured Bifrost connection. No app account or cloud sync is required.
 
-Use Node 22, 24 or 26 and npm. On macOS, the disk-lock dependency compiles during installation and requires existing Xcode Command Line Tools and Python. Use the same Node major version for installation and running the app. Clone the complete repository, then run from its root:
+## Features
+
+- **Claude chat:** Opus 5.5 and Sonnet 5.5, per-chat model selection and five reasoning-effort settings. Medium is the default.
+- **Projects:** group chats, share instructions and connect local source folders. Files stay on your Mac and are read when requested.
+- **Local tools:** every chat can work with `~/.claude` and `~/.codex` and run terminal commands. Projects add connected folders.
+- **Native folder selection:** Electron opens a directory sheet attached to its window. The browser version uses a compiled macOS helper, prepared at startup. Neither picker runs AppleScript.
+- **Web search:** Claude-native search and fetch through Bifrost, with citations and retained provider history. Search is on by default for new chats.
+- **Conversation tools:** Markdown, code, math, attachments, edit, retry, branch, archive, exports and explicit questions requiring your answer.
+- **Local persistence:** chats, projects and owned assets save automatically on disk. Settings provides backups and recovery.
+- **Compact activity:** tool-only rounds show a short activity row; reasoning and detailed tool calls remain available when needed.
+
+## Requirements
+
+| | Browser version | Electron app |
+| --- | --- | --- |
+| Supported host | macOS | Apple silicon macOS |
+| Runtime | Node 22, 24 or 26 and npm | Bundled with the installed app |
+| Build tools | Xcode Command Line Tools and Python for native dependencies | Same tools plus Node/npm, only when building |
+| AI connection | Bifrost key in environment or macOS Keychain | Bifrost key in environment or macOS Keychain |
+
+Use the same Node major version when installing dependencies and running the browser server. Node 22 is the repository default (`.nvmrc`). The current packaging target is `arm64`; Intel and universal builds are deferred.
+
+## Browser version
+
+Run commands from the repository root:
 
 ```sh
 npm ci
 just up
 ```
 
-`just up` starts the local development app on port 3004. Use `just up 3005` or set `PORT` to choose another port. Without `just`, run `PORT=3004 npm run dev:local`.
+Open [127.0.0.1:3004](http://127.0.0.1:3004/). `just up 3005` chooses another port; `PORT` also overrides the default. Without `just`:
 
-Open [127.0.0.1:3004](http://127.0.0.1:3004/). The launcher binds to loopback. No login or account setup is needed. For a production build:
+```sh
+PORT=3004 npm run dev:local
+```
+
+The launcher binds to loopback, loads the Bifrost key, prepares the native folder picker and prevents idle sleep on macOS. The helper compiles once into the ignored `build/native/` directory and is reused until its source or bundle metadata changes. Compilation happens before the server starts, not when Add folder is clicked.
+
+For a production server, stop the existing server before rebuilding its output:
 
 ```sh
 npm run build
 PORT=3004 npm run start:local
 ```
 
-Stop the running app before rebuilding its production output. Source archives need `NEXT_PUBLIC_BUILD_HASH=v0.1.0` for the build; Git clones provide build identity automatically. Browser dictation uses Chrome Web Speech and sends audio to Google.
+Use the local launcher for key configuration and folder-picker preparation. A source archive without Git metadata needs `NEXT_PUBLIC_BUILD_HASH=v0.1.0` for the build. Git clones supply their build identity automatically.
+
+## Electron app
+
+Build and install locally. Stop any browser production server using this checkout before building; desktop packaging rebuilds the shared web output:
+
+```sh
+npm ci
+npm run desktop:setup
+npm run desktop:check
+npm run desktop:build
+npm run desktop:install
+open "desktop/local/Sector 7.app"
+```
+
+The build produces:
+
+- `desktop/out/mac-arm64/Sector 7.app`
+- `desktop/out/Sector-7-0.1.0-arm64.dmg`
+
+The installer copies to the ignored `desktop/local/` directory and refuses to overwrite an existing app or install while Sector 7 is running. You can also copy the app from the DMG in Finder. Quit before replacing an installed copy.
+
+The installed app includes Electron and the local Next.js backend, so no separate Node installation or server is needed. Its default port is **47100**. If that port is occupied, the app reports the conflict. It does not silently switch ports or connect to another process.
+
+Closing the window waits for active work and pending saves. A failed save keeps it open unless you explicitly discard changes. The app remains in the Dock; Cmd+Q saves and shuts down the backend. External links open in your default app.
+
+Local builds use ad-hoc signing. There is no Developer ID signature or notarization, so a downloaded build may need macOS approval before opening. See [desktop setup](docs/electron-mac.md) for configuration, logs, isolated launches and build-output overrides.
+
+### Manual GitHub build
+
+Once the workflow is available on `main`, open **Actions > Build Mac app > Run workflow** and select **main**. This separate manual action runs the web quality gate and desktop checks, then builds the Apple silicon app and DMG. Download its artifacts from the completed run; they are retained for 14 days.
+
+The app is zipped with `ditto` to preserve bundle permissions. Runs on other branches are skipped. Hosted execution still needs verification after the workflow reaches `main`.
+
+### Homebrew installation and updates
+
+Every manual **Build Mac app** run publishes its build for Homebrew. Configure a GitHub environment named `release`, restrict its deployment branches to `main`, and store `SECTOR7_RELEASE_TOKEN` there. Use a fine-grained token scoped to this repository with Contents and Pull requests write permissions. It lets the cask PR trigger the required CI checks. Local `npm run desktop:build` does not publish.
+
+After a successful build, the action publishes the ZIP and DMG under `desktop-v<version>` and opens a PR adding or updating `Casks/sector-7.rb` with the ZIP's SHA-256. Merge that cask PR manually. After the first cask PR reaches `main`:
+
+```sh
+brew tap AdriaanVE/sector-7 https://github.com/AdriaanVE/sector-7
+brew install --cask sector-7
+```
+
+Quit Sector 7 before updating:
+
+```sh
+brew update
+brew upgrade --cask sector-7
+```
+
+Homebrew installs the app in Applications. `brew uninstall --cask sector-7` preserves chats, projects, configuration and logs. The cask supports Apple silicon on macOS 13 or later. Builds are ad-hoc signed and may need macOS approval when downloaded; upgrades may prompt again for folder, microphone or Keychain access. The workflow never republishes an existing version; run `npm version patch --prefix desktop --no-git-tag-version` before publishing another update. The first hosted release and Homebrew installation remain unverified. See [desktop setup](docs/electron-mac.md).
 
 ## Bifrost connection
 
-The launcher reads `BIFROST_API_KEY` or the existing macOS Keychain entry: account `adriaan.van.erps`, service `telenet-bifrost-dev-virtual-key`. Override these names with `BIFROST_KEYCHAIN_ACCOUNT` and `BIFROST_KEYCHAIN_SERVICE`. Set `BIFROST_ANTHROPIC_BASE_URL` to change the Anthropic-compatible gateway endpoint. Keep credentials in your environment or Keychain, never in source files or browser storage. [Configuration reference](docs/configuration.md).
+The browser launcher and desktop app read `BIFROST_API_KEY` first, then the configured macOS Keychain entry. The personal defaults are:
 
-Chat models are `claude-opus-5-5` and `claude-sonnet-5-5`, with medium effort by default. Claude's native web search and web fetch travel through Bifrost, preserving citations and full provider history. Web search is on by default for new chats and can be disabled in the conversation menu. Future OpenAI support will use provider-specific adapters.
+| Setting | Default |
+| --- | --- |
+| Keychain account | `adriaan.van.erps` |
+| Keychain service | `telenet-bifrost-dev-virtual-key` |
+| Models | `claude-opus-5-5`, `claude-sonnet-5-5` |
+| Reasoning effort | `medium` |
 
-## Workspace
+Override the key lookup with `BIFROST_KEYCHAIN_ACCOUNT` and `BIFROST_KEYCHAIN_SERVICE`. Set `BIFROST_ANTHROPIC_BASE_URL` to use another Anthropic-compatible Bifrost endpoint. Keep credentials in the server environment or Keychain, never in source files, browser storage or desktop configuration.
 
-Every chat has local file tools for `~/.claude` and `~/.codex`, plus terminal commands, so installing and managing skills does not require a project. These default folders are created when first used if missing. Projects group chats, share instructions and add file connections. Use Add folder to choose a local repository in the macOS folder browser, then Save the project. Files are read only when requested, rather than bulk imported. The connected path is stored locally. Models can inspect and change files and run commands using Sector 7's local process permissions; setting a command's working directory does not create a sandbox. Project file uploads are replaced by these folder connections. Message attachments remain separate.
+The desktop app creates `~/Library/Application Support/Sector 7/config.json` for its port, sleep preference, gateway endpoint and Keychain lookup names. It contains no API key. Environment overrides and the full configuration are documented in [configuration](docs/configuration.md) and [desktop setup](docs/electron-mac.md).
 
-Chats, projects, processed context and owned assets save automatically on disk. The existing data directory stays `~/Library/Application Support/AI GUI`, including after the Sector 7 rename. Set `AI_GUI_DATA_DIR` to choose another location. Browser caches are disposable. Settings provides backup and recovery controls. [Storage and backup](docs/local-workspace-data.md).
+## Projects and file access
 
-The UI retains Markdown/code/math, attachments, editing, retry, branching, archive, local exports, voice input and explicit questions requiring your decision. Local slash skills follow the selected model's Claude/Codex folder. Automatic AI extras can be disabled in Settings. Detailed tool calls are hidden by default; a concise neon activity line shows the current task. Enable Settings > Conversation > Show all tool calls to inspect saved tool inputs and results.
+Create a project, enter its name, choose **Add folder**, then **Save**. New connections remain in the editor draft until Save; Cancel discards them. Shared instructions apply to future replies in that project.
 
-## Preview limits
+Connected repositories are not uploaded or bulk imported. Models use the current files through on-demand list, read, search, write and edit tools. Removing a connection stops future access through that project folder. Default Claude/Codex folders and local terminal tools remain available to every chat.
 
-Hosted code execution is unsupported by the current Bifrost deployment. Local coding tasks use the connected workspace file and terminal tools. Image generation and a dedicated voice input model need connections selected later. Browser/native-tool integration and the remaining storage/question lifecycle acceptance checks are still in progress. [0.1 release status](docs/releases/0.1.0.md) records the verified scope and gaps. This preview is not final roadmap acceptance.
+Local commands run with the app's process permissions and can access locations beyond connected folders. A working directory is not a sandbox. File tools exclude credentials and Git internals; terminal commands retain ordinary local access. Changes to existing files use fresh hashes and retain recovery originals. Message attachments are separate from project folder connections.
 
-The original upstream Docker/deployment assets remain for reference; the supported 0.1 launch path is the local npm launcher. Automated container publishing and upstream issue-response automation are disabled for this personal repository.
+## Data, backups and privacy
 
-## Code and checks
+The durable workspace remains at:
 
-The repository includes the complete application, static assets, tests, tooling, lockfile, configuration, license and planning documents. [Folder and file structure](docs/structure.md).
+```text
+~/Library/Application Support/AI GUI
+```
+
+The historical directory name is intentional: the Sector 7 rename preserves existing chats and projects. Set `AI_GUI_DATA_DIR` to choose another directory; the desktop config also accepts `dataDir`.
+
+Browser caches and the Electron profile are disposable. Electron stores its profile/configuration under `~/Library/Application Support/Sector 7`; logs are under `~/Library/Logs/Sector 7`. The desktop app protects its loopback backend with a per-launch token.
+
+Use **Settings** for validated ZIP backups and recovery. Workspace backups include saved chats, projects and owned assets. They do not back up connected repositories or local edit/command recovery directories. Keep repositories in Git and maintain their own backups. See [storage and backup](docs/local-workspace-data.md).
+
+Chat requests and native web tools travel through the configured Bifrost gateway. Local-first storage does not mean offline inference. Chrome browser dictation uses Google-backed Web Speech; that dictation path is unavailable in Electron. Leave analytics settings unset for the personal local app.
+
+## Development and checks
+
+The application uses Next.js 15, React 18, Joy UI, Emotion, Zustand and the inherited AIX engine. Pages use the Pages Router; API routes use the App Router. The Electron shell is a separate package under `desktop/`. [Repository structure](docs/structure.md).
 
 ```sh
 npm run hooks:install
 npm run precommit
+npm run desktop:check
 ```
 
-The quality gate includes types, lint and offline tests. Network tests require `npm run test:network` and vendor credentials. See [tests and CI](docs/testing.md) for the audit, commands and main protection status. See [implementation plan](docs/roadmap/planned/impl_plan.md) for the broader scope.
+The quality gate checks whitespace, both TypeScript projects, lint and offline tests. Individual commands are `npm run tscheck`, `npm run lint` and `npm test`. Vendor tests require explicit `npm run test:network` and credentials; skipped vendor tests do not establish compatibility. [Testing and CI](docs/testing.md).
 
-Sector 7 is MIT-licensed. Copyright for the Sector 7 modifications belongs to Adriaan Van Erps. The upstream copyright and MIT license notices remain in [LICENSE](LICENSE); [upstream README](docs/upstream/README.md) preserves the original project documentation.
+Desktop packaging rebuilds `fs-ext` only in the desktop dependency tree for Electron's Node ABI. It leaves the browser version's native dependency intact. Build staging is retained under `desktop/.stage-*` for inspection; `SECTOR7_DESKTOP_OUTPUT` selects a separate absolute output directory when needed.
+
+## Preview limits
+
+This is an early local Mac preview, not completed roadmap acceptance. Claude hosted code execution is unsupported by the current gateway; local terminal tools provide coding execution. Dedicated image and voice providers, broader browser/native integration, automatic updates, Intel/universal packaging and notarization remain deferred.
+
+Some storage/profile recovery, question lifecycle, React Stop/reload, navigation and artifact acceptance checks remain open. The native helper's real selection/cancellation and local app packaging have been checked, but controlled click-to-popup comparisons and the manual hosted build remain separate acceptance checks. See [release status](docs/releases/0.1.0.md) and the [remaining acceptance matrix](docs/roadmap/analysis/sector-7-remaining-acceptance.md).
+
+The inherited Docker/deployment files are retained as upstream references. The supported launch paths are the local browser launcher and Electron app. Upstream container publishing and automatic issue-response workflows are disabled.
+
+## License
+
+Sector 7 is MIT-licensed. Copyright for the Sector 7 modifications belongs to Adriaan Van Erps. The upstream copyright and license notices remain in [LICENSE](LICENSE). The [upstream README](docs/upstream/README.md) preserves the original project documentation.
