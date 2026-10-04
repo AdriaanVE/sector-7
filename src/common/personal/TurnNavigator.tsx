@@ -14,8 +14,8 @@ const previewEnter = keyframes`from { opacity: 0; transform: translateX(-4px); }
 const stripeStep = 12;
 const targetSx = {
   p: 0, minWidth: 36, width: 36, borderRadius: 4, justifyContent: 'flex-start',
-  color: 'text.secondary', background: 'transparent', boxShadow: 'none',
-  '&:not(:disabled):hover': { background: 'transparent', boxShadow: 'none', transform: 'none' },
+  color: 'text.secondary', background: 'transparent', boxShadow: 'none', transition: 'none',
+  '&:not(:disabled):not([aria-disabled="true"]):hover': { background: 'transparent', boxShadow: 'none', transform: 'none' },
   '&:focus-visible': { outline: '2px solid', outlineColor: 'focusVisible', outlineOffset: 2, boxShadow: 'none' },
 } as const satisfies SxProps;
 const menuSx = { maxHeight: '60vh', overflow: 'auto', width: 320, maxWidth: 'calc(100vw - 24px)' } as const;
@@ -59,6 +59,7 @@ export function TurnNavigator({ messages, listRef }: {
   const [hovered, setHovered] = React.useState<number | null>(null);
   const [previewBucket, setPreviewBucket] = React.useState<number | null>(null);
   const [openBucket, setOpenBucket] = React.useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [railSpace, setRailSpace] = React.useState({ height: 240, center: 200 });
   const railRef = React.useRef<HTMLDivElement>(null);
   const nodesRef = React.useRef(new Map<string, HTMLElement>());
@@ -141,6 +142,13 @@ export function TurnNavigator({ messages, listRef }: {
     });
   };
   const buckets = turnBuckets(turns.length, railSpace.height, stripeStep);
+  const bucketCount = buckets.length;
+  React.useEffect(() => {
+    // Regrouping can remove an open menu without sending its close event.
+    setOpenBucket(null);
+    setPreviewBucket(null);
+    setHovered(null);
+  }, [bucketCount, turnIds]);
   const railHeight = buckets.length * stripeStep;
   const activeIndex = turns.findIndex(turn => turn.id === active);
   const activeBucket = Math.max(0, buckets.findIndex(bucket => activeIndex >= bucket.start && activeIndex <= bucket.end));
@@ -158,11 +166,11 @@ export function TurnNavigator({ messages, listRef }: {
   return <Box component='li' sx={{ position: 'sticky', top: Math.max(16, railSpace.center - railHeight / 2), height: 0, flexShrink: 0, alignSelf: 'flex-start', width: 36, ml: { xs: '-36px', md: '-40px' }, zIndex: 4, listStyle: 'none', transition: 'top 220ms ease-out', '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }}>
     <Box component='nav' aria-label='Conversation turns'>
       <Box sx={{ display: { xs: 'block', md: 'none' }, '@media (pointer: coarse)': { display: 'block' } }}>
-        <Dropdown>
+        <Dropdown onOpenChange={(_event, open) => setMobileMenuOpen(open)}>
           <MenuButton aria-label={`Jump to turn (${turns.length} turns)`} variant='plain' sx={{ ...targetSx, minHeight: 44, flexDirection: 'column', justifyContent: 'center', alignItems: 'flex-start', gap: '4px' }}>
             {[8, 16, 8].map((width, index) => <Box key={index} component='span' sx={{ width, height: 2, borderRadius: 1, bgcolor: 'text.secondary' }} />)}
           </MenuButton>
-          <Menu placement='bottom-start' aria-label='All conversation turns' sx={menuSx}>{menuItems(0, turns.length - 1)}</Menu>
+          <Menu placement='bottom-start' aria-label='All conversation turns' sx={menuSx}>{mobileMenuOpen && menuItems(0, turns.length - 1)}</Menu>
         </Dropdown>
       </Box>
       <Box ref={railRef} sx={{ display: { xs: 'none', md: 'flex' }, flexDirection: 'column', height: railHeight, transition: 'height 220ms ease-out', '@media (pointer: coarse)': { display: 'none' }, '@media (prefers-reduced-motion: reduce)': { transition: 'none' } }} onKeyDownCapture={event => {
@@ -202,9 +210,9 @@ export function TurnNavigator({ messages, listRef }: {
               ? <Button {...targetProps} onClick={() => jump(turns[start])}>{tick}</Button>
               : <MenuButton {...targetProps}>{tick}</MenuButton>}
           </Tooltip>;
-          return start === end ? stripe : <Dropdown key={turns[start].id} onOpenChange={(_event, open) => { setOpenBucket(open ? index : null); if (open) setPreviewBucket(null); }}>
+          return start === end ? stripe : <Dropdown key={turns[start].id} open={openBucket === index} onOpenChange={(_event, open) => { setOpenBucket(open ? index : null); if (open) setPreviewBucket(null); }}>
             {stripe}
-            <Menu placement='right-start' aria-label={`Turns ${start + 1} to ${end + 1}`} sx={menuSx}>{menuItems(start, end)}</Menu>
+            <Menu placement='right-start' aria-label={`Turns ${start + 1} to ${end + 1}`} sx={menuSx}>{openBucket === index && menuItems(start, end)}</Menu>
           </Dropdown>;
         })}
       </Box>

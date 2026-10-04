@@ -49,3 +49,17 @@ The stripe button and group-menu trigger share accessibility props and one previ
 Rail height and grouping use the same stripe-spacing value. The simplified controls retain
 keyboard previews and exact-turn jumps in the browser fixture. The Node 22 quality gate
 passes with 229 tests and 22 vendor skips.
+
+## Review corrections
+
+Claude's first review identified two defects. The stripe target now matches the app theme's
+hover-selector specificity, preserving the inner green LED animation without the theme's
+button lift or purple ring. Group dropdowns are controlled, and regrouping or changed turn
+ids close them and reset preview state. An open menu cannot leave all previews suppressed
+after its trigger unmounts. Menus only render their exact-turn items while open.
+
+The browser fixture now uses `createAppTheme` with font loading stubbed. Checked shared
+controls, opening a grouped menu, resizing to change the bucket count, menu closure and
+keyboard previews after regrouping. Full-app acceptance remains separate.
+
+The PR contains only the rail changes on current `main`, after the composer PR was merged.
