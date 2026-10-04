@@ -3,13 +3,14 @@ import { createDMessageFromFragments } from '~/common/stores/chat/chat.message';
 import { zipSync, strToU8 } from 'fflate';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, readdir, utimes } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, readdir, utimes, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { emptyWorkspace, validateWorkspace, reviveAssetDates } from '~/common/personal/workspace-schema';
 import { commitWorkspace, loadWorkspace, recoverWorkspace, backupWorkspace, restoreWorkspace, writeAsset, workspaceRecoveryRevision } from './workspace';
-test('atomic saves reject stale revision and recover last-good after corruption', async () => {
+test('atomic saves reject stale revision and recover last-good after corruption', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-test-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   const first = await commitWorkspace(emptyWorkspace(), 0, dir);
   assert.equal(first.revision, 1);
   await assert.rejects(commitWorkspace(first, 0, dir), /newer data/);
@@ -22,8 +23,9 @@ test('atomic saves reject stale revision and recover last-good after corruption'
   await assert.rejects(commitWorkspace(first, 2, dir), /newer data/);
   assert.equal((await commitWorkspace(recovered, 2, dir, recovered.revisionEpoch)).revision, 3);
 });
-test('asset bytes must exist before a manifest commit and round trip through backup', async () => {
+test('asset bytes must exist before a manifest commit and round trip through backup', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-assets-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   const workspace = emptyWorkspace();
   const { _abortController, ...chat } = createDConversation();
   chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'image', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'a', mimeType: 'text/plain', bytesSize: 3 } } }])];
@@ -34,6 +36,7 @@ test('asset bytes must exist before a manifest commit and round trip through bac
   await commitWorkspace(workspace, 0, dir);
   const backup = await backupWorkspace(dir);
   const other = await mkdtemp(join(tmpdir(), 'ai-gui-restored-'));
+  t.after(() => rm(other, { recursive: true, force: true }));
   assert.equal((await restoreWorkspace(backup, 0, other)).revision, 1);
   assert.deepEqual([...await readFile(join(other, 'assets', 'a'))], [1, 2, 3]);
   assert.ok(reviveAssetDates(workspace).assets.a.metadata.createdAt instanceof Date);
@@ -43,8 +46,9 @@ test('workspace schema excludes providers, credentials and incognito chats', () 
   assert.throws(() => validateWorkspace({ ...emptyWorkspace(), stores: { 'app-chats': { version: 5, state: { conversations: [{ id: 'a', messages: [], _isIncognito: true }] } } } }));
 });
 
-test('deep validation rejects malformed records and dangling references without replacing primary', async () => {
+test('deep validation rejects malformed records and dangling references without replacing primary', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-malformed-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   const saved = await commitWorkspace(emptyWorkspace(), 0, dir);
   const before = await readFile(join(dir, 'workspace.json'), 'utf8');
   const bad = { ...saved, stores: { 'app-chats': { version: 5, state: { conversations: [{ id: 'chat', messages: [{ id: 'message', role: 'assistant' }] }] } } } };
@@ -53,10 +57,12 @@ test('deep validation rejects malformed records and dangling references without 
   assert.equal(await readFile(join(dir, 'workspace.json'), 'utf8'), before);
   assert.throws(() => validateWorkspace({ ...saved, stores: { 'app-folders': { version: 1, state: { enableFolders: true, folders: [{ id: 'p', title: 'P', instructions: '', revision: 0, conversationIds: [], fileIds: ['missing'] }] } } } }), /missing/);
 });
-test('restore preserves corrupt primary and enforces readable primary revision', async () => {
+test('restore preserves corrupt primary and enforces readable primary revision', async t => {
   const source = await mkdtemp(join(tmpdir(), 'ai-gui-backup-source-'));
+  t.after(() => rm(source, { recursive: true, force: true }));
   await commitWorkspace(emptyWorkspace(), 0, source); const bytes = await backupWorkspace(source);
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-corrupt-restore-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   await writeFile(join(dir, 'workspace.json'), 'original corrupt bytes');
   assert.deepEqual(await workspaceRecoveryRevision(dir), { revision: 'corrupt' });
   await assert.rejects(restoreWorkspace(bytes, 0, dir), /changed/);
@@ -68,8 +74,9 @@ test('restore preserves corrupt primary and enforces readable primary revision',
   await assert.rejects(restoreWorkspace(bytes, 1, dir), /changed/);
   assert.equal((await restoreWorkspace(bytes, 1, dir, restored.revisionEpoch)).revision, 2);
 });
-test('legacy assets larger than 10 MB survive backup and restore; old unowned bytes collect after commit', async () => {
+test('legacy assets larger than 10 MB survive backup and restore; old unowned bytes collect after commit', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-large-asset-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   const workspace = emptyWorkspace(); const { _abortController, ...chat } = createDConversation();
   const bytes = new Uint8Array(10 * 1024 * 1024 + 1); bytes[0] = 1;
   chat.messages = [createDMessageFromFragments('user', [{ ft: 'content', fId: 'img', part: { pt: 'image_ref', dataRef: { reftype: 'dblob', dblobAssetId: 'large', mimeType: 'image/png', bytesSize: bytes.length } } }])];
@@ -80,13 +87,15 @@ test('legacy assets larger than 10 MB survive backup and restore; old unowned by
   const saved = await commitWorkspace(workspace, 0, dir); assert.equal(saved.assets.large.size, bytes.length);
   assert.ok(!(await readdir(join(dir, 'assets'))).includes('orphan'));
   const backup = await backupWorkspace(dir); const restored = await mkdtemp(join(tmpdir(), 'ai-gui-large-restored-'));
+  t.after(() => rm(restored, { recursive: true, force: true }));
   await restoreWorkspace(backup, 0, restored); assert.equal((await readFile(join(restored, 'assets', 'large'))).length, bytes.length);
   await commitWorkspace(emptyWorkspace(), 1, dir); assert.ok((await readdir(join(dir, 'assets'))).includes('large'));
 });
 
 
-test('corrupt first-save restore rejects every legacy token and every former recovery epoch', async () => {
+test('corrupt first-save restore rejects every legacy token and every former recovery epoch', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'ai-gui-epochs-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
   const first = await commitWorkspace(emptyWorkspace(), 0, dir);
   const bytes = await backupWorkspace(dir);
   const corrupt = 'corrupt first revision without last-good';

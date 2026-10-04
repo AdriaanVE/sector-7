@@ -13,7 +13,8 @@ test('connected folder tools read current files on demand and preserve recoverab
   try {
     await writeFile(join(root, 'a.txt'), 'alpha\nbeta\n', { mode: 0o640 }); await writeFile(join(root, '.github', 'test.yml'), 'workflow');
     const folder = await validateFolderPath(root); const run = (name: string, args = {}) => executeFolderTool(folder, { name, folder_id: folder.id, ...args }, undefined, data);
-    const list = await run('folder_list'); assert.match(JSON.stringify(list), /\.github/);
+    const list = await run('folder_list');
+    assert.deepEqual(list.entries, [{ name: '.github', type: 'directory' }, { name: 'a.txt', type: 'file' }]);
     let read = await run('folder_read', { path: 'a.txt' }); assert.equal(read.text, 'alpha\nbeta\n');
     await writeFile(join(root, 'a.txt'), 'current\nbeta\n');
     await assert.rejects(run('folder_edit', { path: 'a.txt', sha256: read.sha256, old_text: 'alpha', new_text: 'changed' }), /changed since/);
@@ -21,7 +22,8 @@ test('connected folder tools read current files on demand and preserve recoverab
     const edited = await run('folder_edit', { path: 'a.txt', sha256: read.sha256, old_text: 'current', new_text: 'updated' });
     assert.equal(await readFile(join(root, 'a.txt'), 'utf8'), 'updated\nbeta\n'); assert.equal((await stat(join(root, 'a.txt'))).mode & 0o777, 0o640);
     const backup = JSON.parse(await readFile(join(data, 'file-edit-backups', `${edited.backup_id}.json`), 'utf8')); assert.equal(Buffer.from(backup.originalBase64, 'base64').toString(), 'current\nbeta\n');
-    assert.match(JSON.stringify(await run('folder_search', { query: 'updated' })), /updated/);
+    const search = await run('folder_search', { query: 'updated' });
+    assert.deepEqual(search.matches, [{ path: 'a.txt', line: 1, text: 'updated' }]);
     const created = await run('folder_write', { path: 'new.txt', text: 'created' });
     await assert.rejects(run('folder_write', { path: 'new.txt', text: 'overwrite without hash' }), /EEXIST/);
     await run('folder_move', { path: 'new.txt', destination: 'moved.txt', sha256: created.sha256 }); assert.equal(await readFile(join(root, 'moved.txt'), 'utf8'), 'created');
@@ -34,7 +36,17 @@ test('folder capability rejects traversal, absolute paths, symlinks, private/bin
   try {
     await writeFile(join(temp, 'outside'), 'private'); await symlink(join(temp, 'outside'), join(root, 'escape')); await writeFile(join(root, '.env'), 'key'); await writeFile(join(root, 'binary'), Buffer.from([0, 1])); await writeFile(join(root, 'huge'), 'x'.repeat(256 * 1024 + 1));
     const folder = await validateFolderPath(root);
-    for (const path of ['../outside', join(temp, 'outside'), 'escape', '.env', 'binary', 'huge']) await assert.rejects(executeFolderTool(folder, { name: 'folder_read', folder_id: folder.id, path }));
+    const rejectedPaths = [
+      ['../outside', 403, /outside the connected folder/],
+      [join(temp, 'outside'), 403, /outside the connected folder/],
+      ['escape', 403, /Symbolic links/],
+      ['.env', 403, /private credentials/],
+      ['binary', 400, /Binary files/],
+      ['huge', 400, /up to 256 KB/],
+    ] as const;
+    for (const [path, status, message] of rejectedPaths) {
+      await assert.rejects(executeFolderTool(folder, { name: 'folder_read', folder_id: folder.id, path }), { status, message });
+    }
     const stop = new AbortController(); stop.abort(); await assert.rejects(executeFolderTool(folder, { name: 'folder_list', folder_id: folder.id }, stop.signal));
     await assert.rejects(executeFolderTool(folder, { name: 'folder_list', folder_id: 'different' }), /capability/);
   } finally { await rm(temp, { recursive: true, force: true }); }
