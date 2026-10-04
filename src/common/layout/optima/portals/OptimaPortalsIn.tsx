@@ -32,7 +32,7 @@ export function OptimaDrawerIn(props: { children: React.ReactNode }) {
       data-optima-piw='drawer' // portal input wrapper
       // Portaled rail controls are React descendants, but should not trigger drawer peeking.
       onMouseEnter={event => { if (event.target instanceof Node && event.currentTarget.contains(event.target)) peekDrawerEnter(); }}
-      onMouseLeave={event => { if (event.target instanceof Node && event.currentTarget.contains(event.target)) peekDrawerLeave(); }}
+      onMouseLeave={peekDrawerLeave}
       style={drawerWrapperStyle}
     >
       {props.children}
