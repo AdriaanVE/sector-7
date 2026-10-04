@@ -15,11 +15,10 @@ import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { ColorPaletteProp, SxProps, VariantProp } from '@mui/joy/styles/types';
-import { Box, Button, Card, IconButton, Textarea, Tooltip, Typography } from '@mui/joy';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { Box, Button, Card, IconButton, Textarea, Typography } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
 import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
-import TelegramIcon from '@mui/icons-material/Telegram';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 
 import type { AppChatIntent } from '../../AppChat';
 import { useChatAutoSuggestAttachmentPrompts, useChatMicTimeoutMsValue } from '../../store-app-chat';
@@ -28,7 +27,7 @@ import { useAgiAttachmentPrompts } from '~/modules/aifn/agiattachmentprompts/use
 import { useBrowseCapability } from '~/modules/browse/store-module-browsing';
 
 import type { DComposerPendingPart } from '~/common/chat-overlay/store-perchat-composer_slice';
-import { DLLM, LLM_IF_OAI_Vision } from '~/common/stores/llms/llms.types';
+import { DLLM, getLLMLabel, LLM_IF_OAI_Vision } from '~/common/stores/llms/llms.types';
 import { llmChatPricing_adjusted } from '~/common/stores/llms/llms.pricing';
 import { AudioGenerator } from '~/common/util/audio/AudioGenerator';
 import { AudioPlayer } from '~/common/util/audio/AudioPlayer';
@@ -53,7 +52,7 @@ import { supportsCameraCapture } from '~/common/components/camera/useCameraCaptu
 import { supportsScreenCapture } from '~/common/util/screenCaptureUtils';
 import { useAttachHandler_CameraOpen, useAttachHandler_Files, useAttachHandler_PasteIntercept, useAttachHandler_ScreenCapture, useAttachHandler_UrlWebLinks } from '~/common/attachment-drafts/attachment-sources/useAttachmentSourceHandlers';
 import { useChatComposerOverlayStore } from '~/common/chat-overlay/store-perchat_vanilla';
-import { useComposerStartupText, useLogicSherpaStore } from '~/common/logic/store-logic-sherpa';
+import { useComposerStartupText } from '~/common/logic/store-logic-sherpa';
 import { useOverlayComponents } from '~/common/layout/overlays/useOverlayComponents';
 import { getUIEnterIsNewline, useUICounter, useUIPreferencesStore } from '~/common/stores/store-ui';
 import { useUXLabsStore } from '~/common/stores/store-ux-labs';
@@ -83,15 +82,14 @@ import { ComposerTextAreaActions } from './textarea/ComposerTextAreaActions';
 import { ComposerTextAreaDrawActions } from './textarea/ComposerTextAreaDrawActions';
 import { StatusBarMemo } from '../StatusBar';
 import { ComposerRim } from './ComposerRim';
-import { TokenBadgeMemo } from './tokens/TokenBadge';
-import { TokenProgressbarMemo } from './tokens/TokenProgressbar';
+import { ComposerChatConfigPicker } from './ComposerChatConfigPicker';
+import { ComposerStatusLine } from './tokens/ComposerStatusLine';
 import { useComposerDragDrop } from './useComposerDragDrop';
 import { useRequestTokenPreview } from './tokens/useRequestTokenPreview';
 
 
 // configuration
 const zIndexComposerOverlayMic = 10;
-const SHOW_TIPS_AFTER_RELOADS = 25;
 
 
 const paddingBoxSx: SxProps = {
@@ -112,6 +110,7 @@ export function Composer(props: {
   isMobile: boolean;
   chatLLM: DLLM | null;
   composerTextAreaRef: React.RefObject<HTMLTextAreaElement>;
+  configButtonRef: React.Ref<HTMLButtonElement>;
   targetConversationId: DConversationId | null;
   capabilityHasT2I: boolean;
   capabilityHasT2IEdit: boolean;
@@ -142,8 +141,8 @@ export function Composer(props: {
   const {
     chatExecuteMode,
     chatExecuteModeSendColor, chatExecuteModeSendLabel,
-    chatExecuteMenuComponent, chatExecuteMenuShown, showChatExecuteMenu,
-  } = useChatExecuteMode(props.capabilityHasT2I, props.isMobile);
+    setChatExecuteMode,
+  } = useChatExecuteMode();
   const [isMinimized, setIsMinimized] = React.useState(false);
   const micCardRef = React.useRef<HTMLDivElement>(null);
 
@@ -154,8 +153,7 @@ export function Composer(props: {
     labsComposerAttachmentsInline: state.labsComposerAttachmentsInline,
     labsShowShortcutBar: state.labsShowShortcutBar,
   })));
-  const timeToShowTips = useLogicSherpaStore(state => state.usageCount >= SHOW_TIPS_AFTER_RELOADS);
-  const { novel: explainShiftEnter, touch: touchShiftEnter } = useUICounter('composer-shift-enter');
+  const { touch: touchShiftEnter } = useUICounter('composer-shift-enter');
 
   const [startupText, setStartupText] = useComposerStartupText();
   const enterIsNewline = useUIPreferencesStore(state => state.enterIsNewline);
@@ -260,7 +258,6 @@ export function Composer(props: {
   }), [budgetChat, props.chatLLM, chatExecuteMode, composeText, attachmentDrafts, selectedSkills, pendingParts, budgetProjects, budgetFiles, personalInstructions]);
   const preview = useRequestTokenPreview(previewInput);
   const tokensComposer = preview && 'inputTokens' in preview ? preview.inputTokens : 0;
-  const tokensHistory = 0;
   const tokensResponseMax = preview && 'budget' in preview ? preview.budget.total - preview.inputTokens : 0;
   const tokenLimit = preview && 'budget' in preview ? preview.budget.limit : 0;
   const tokenChatPricing = React.useMemo(() => llmChatPricing_adjusted(props.chatLLM), [props.chatLLM]);
@@ -691,7 +688,7 @@ export function Composer(props: {
       //   composerShortcuts.push({ key: 's', ctrl: true, shift: true, action: openScreenCaptureDialog, description: 'Attach Screen Capture' });
     }
     if (recognitionState.isActive) {
-      composerShortcuts.push({ key: 'm', ctrl: true, action: handleFinishMicAndSend, description: 'Mic · Send', disabled: !recognitionState.hasSpeech || sendStarted, endDecoratorIcon: TelegramIcon as any, level: 4 });
+      composerShortcuts.push({ key: 'm', ctrl: true, action: handleFinishMicAndSend, description: 'Mic · Send', disabled: !recognitionState.hasSpeech || sendStarted, endDecoratorIcon: PlayArrowRoundedIcon as any, level: 4 });
       composerShortcuts.push({
         key: ShortcutKey.Esc, action: () => {
           setMicContinuation(false);
@@ -715,8 +712,6 @@ export function Composer(props: {
   const isAppend = chatExecuteMode === 'append-user';
   const isDraw = chatExecuteMode === 'generate-image';
 
-  const showChatInReferenceTo = !!inReferenceTo?.length;
-
   const sendButtonColor: ColorPaletteProp =
     assistantBusy ? 'warning'
       : !attEnrichSummary.allCompatible ? 'warning'
@@ -727,16 +722,11 @@ export function Composer(props: {
   const sendButtonIcon =
     isAppend ? <SendIcon sx={{ fontSize: 18 }} />
             : isDraw ? <PhPaintBrush />
-              : <TelegramIcon />;
+              : <PlayArrowRoundedIcon />;
 
   const showTint: ColorPaletteProp | undefined = isDraw ? 'warning' : undefined;
 
-  let textPlaceholder = isDraw ? 'Describe an image...' : 'Message Claude, or / to select a skill';
-
-  if (isDesktop && timeToShowTips && !isDraw) {
-    if (explainShiftEnter)
-      textPlaceholder += !enterIsNewline ? '\n\n⏎ Shift + Enter to add a new line' : '\n\n➤ Shift + Enter to send';
-  }
+  const textPlaceholder = isDraw ? 'Describe an image...' : props.chatLLM ? `Message ${getLLMLabel(props.chatLLM)}, or / for skills` : 'Message, or / for skills';
 
   const stableGridSx: SxProps = React.useMemo(() => ({
     // basically a position:relative to enable the inner drop area
@@ -777,8 +767,7 @@ export function Composer(props: {
               {/* Text Edit + Mic buttons + MicOverlay */}
               <Box sx={{ position: 'relative' /* for Mic overlay */, height: '100%' }}>
 
-                {/* Edit box with inner Token Progress bar */}
-                <Box sx={{ position: 'relative' /* for TokenBadge & TokenProgress */, height: '100%' }}>
+                <Box sx={{ height: '100%' }}>
 
                   <Textarea
                     variant='plain'
@@ -828,7 +817,6 @@ export function Composer(props: {
                         enterKeyHint: enterIsNewline ? 'enter' : 'send',
                         sx: {
                           ...(recognitionState.isAvailable && { pr: { md: 5 } }),
-                          // mb: 0.5, // no need; the outer container already has enough p (for TokenProgressbar)
                         },
                         ref: composerTextAreaRef,
                       },
@@ -837,16 +825,9 @@ export function Composer(props: {
                       height: '100%',
                       backgroundColor: 'transparent',
                       '--Textarea-focusedThickness': '0px',
+                      fontSize: '0.9375rem',
                       lineHeight: lineHeightTextareaMd,
                     }} />
-
-                  {!showChatInReferenceTo && !isDraw && tokenLimit > 0 && (tokensComposer > 0 || (tokensHistory + tokensResponseMax) > 0) && (
-                    <TokenProgressbarMemo chatPricing={tokenChatPricing} direct={tokensComposer} history={tokensHistory} responseMax={tokensResponseMax} limit={tokenLimit} />
-                  )}
-
-                  {!showChatInReferenceTo && !isDraw && tokenLimit > 0 && (
-                    <TokenBadgeMemo showCost hideBelowDollars={0.01} chatPricing={tokenChatPricing} direct={tokensComposer} history={tokensHistory} responseMax={tokensResponseMax} limit={tokenLimit} enableHover={!isMobile} showExcess absoluteBottomRight />
-                  )}
 
                 </Box>
 
@@ -873,6 +854,7 @@ export function Composer(props: {
                     }}>
                     <Typography sx={{
                       color: 'primary.softColor',
+                      fontSize: '0.9375rem',
                       lineHeight: lineHeightTextareaMd,
                       '& > .preceding': {
                         color: 'primary.softDisabledColor',
@@ -916,15 +898,9 @@ export function Composer(props: {
             </Box>
 
           </Box>
-          {!preview && budgetChat && props.chatLLM && chatExecuteMode === 'generate-content' && <Typography level='body-xs' sx={{ color: 'text.tertiary', textAlign: 'right', mt: 0.5 }}>Updating context estimate...</Typography>}
           {preview?.error && <Typography level='body-xs' color='danger'>{preview.error}</Typography>}
-          {preview && 'budget' in preview && <Box sx={{ mt: 0.5, textAlign: 'right' }}>
-            <Tooltip title='Estimated context, including output and thinking reserve. Uses tiktoken fallback.'>
-              <Typography component='span' tabIndex={0} level='body-xs' color={preview.budget.fits ? 'neutral' : 'danger'} sx={{ fontVariantNumeric: 'tabular-nums', color: preview.budget.fits ? 'text.tertiary' : undefined, '&:focus-visible': { outline: '2px solid var(--joy-palette-focusVisible)', outlineOffset: 2 } }}>{preview.budget.total.toLocaleString()} / {preview.budget.limit.toLocaleString()} tokens estimated</Typography>
-            </Tooltip>
-            {!preview.budget.fits && <Typography level='body-xs' color='danger'>Context exceeds the limit. Start a shorter chat or request less file/command output.</Typography>}
-          </Box>}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pt: 1 }}>
+          {preview && 'budget' in preview && !preview.budget.fits && <Typography level='body-xs' color='danger' sx={{ mt: 0.5, textAlign: 'right' }}>Context exceeds the limit. Start a shorter chat or request less file/command output.</Typography>}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1 }, pt: 1, flexWrap: isDraw ? 'wrap' : undefined }}>
             {showChatAttachments && <AttachmentSourcesMemo mode='menu-compact' canBrowse={browseCapability.mayWork}
               hasScreenCapture={supportsScreenCapture} hasCamera={supportsCameraCapture()} onlyImages={showChatAttachments === 'only-images'}
               onAttachClipboard={attachAppendClipboardItems} onAttachFiles={handleAttachFiles} onAttachScreenCapture={handleAttachScreenCapture}
@@ -933,11 +909,19 @@ export function Composer(props: {
             {micIsRunning && <ButtonMicContinuationMemo isActive={micContinuation} variant='soft' color={micContinuation ? 'primary' : 'neutral'} onClick={handleToggleMicContinuation} />}
             {isDraw && <ButtonGroupDrawRepeat drawRepeat={drawRepeat} setDrawRepeat={setDrawRepeat} />}
             <Box sx={{ flex: 1 }} />
-            <IconButton aria-label='Message mode' disabled={noConversation} variant='plain' color='neutral' onClick={showChatExecuteMenu}><ExpandLessIcon /></IconButton>
+            <ComposerChatConfigPicker conversationId={targetConversationId} buttonRef={props.configButtonRef}
+              mode={chatExecuteMode} onSetMode={setChatExecuteMode} capabilityHasT2I={props.capabilityHasT2I} disabled={sendStarted || assistantBusy} />
             {!assistantAbortible
-              ? <IconButton aria-label={chatRunActive ? 'Stopping response' : sendButtonLabel} variant='solid' color={sendButtonColor} sx={{ borderRadius: '50%', '--IconButton-size': { xs: '40px', sm: '36px' } }} disabled={noConversation || sendStarted || chatRunActive} onClick={handleSendClicked}>{sendButtonIcon}</IconButton>
+              ? <IconButton aria-label={chatRunActive ? 'Stopping response' : sendButtonLabel} variant='solid' color={sendButtonColor} sx={{
+                borderRadius: '50%', '--IconButton-size': { xs: '40px', sm: '36px' },
+                '&:not(:disabled):not([aria-disabled="true"]):hover, &:not(:disabled):not([aria-disabled="true"]):focus-visible': { boxShadow: '0 0 12px rgba(0,255,179,.45)' },
+                '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+              }} disabled={noConversation || sendStarted || chatRunActive} onClick={handleSendClicked}>{sendButtonIcon}</IconButton>
               : <IconButton aria-label='Stop response' variant='soft' color='danger' disabled={noConversation} onClick={handleStopClicked}><StopOutlinedIcon /></IconButton>}
           </Box>
+
+          {!isDraw && props.chatLLM && <ComposerStatusLine direct={tokensComposer} responseMax={tokensResponseMax} limit={tokenLimit}
+            chatPricing={tokenChatPricing} pending={!preview && !!budgetChat && chatExecuteMode === 'generate-content'} compact={isMobile} />}
 
           {/* overlay: Drag & Drop*/}
           {dropComponent}
@@ -945,10 +929,6 @@ export function Composer(props: {
         </Box>
 
       </Box> {/* Padding container of the whole composer */}
-
-      {/* Execution Mode Menu */}
-      {chatExecuteMenuComponent}
-
 
       {/* Web Input Dialog (when open) */}
       {webInputDialogComponent}

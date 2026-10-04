@@ -6,8 +6,8 @@ import { Alert, Box, Button, Checkbox, Dropdown, IconButton, Input, Menu, MenuBu
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import { OpenFolderIcon } from '~/common/components/icons/OpenFolderIcon';
 import { useFolderStore, DFolder } from '~/common/stores/folders/store-chat-folders';
 import { themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { useChatStore } from '~/common/stores/chat/store-chats';
@@ -85,7 +85,7 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
           '&:hover .sector7-project-actions, &:focus-within .sector7-project-actions, & .sector7-project-actions[aria-expanded="true"]': { opacity: 1 },
           '@media (hover: none)': { '& .sector7-project-actions': { opacity: 1 } },
         }}>
-          <IconButton className='sector7-nav-control sector7-nav-icon' size='sm' variant='plain' color='neutral' aria-label={`${expanded[project.id] ? 'Collapse' : 'Expand'} ${project.title}`} aria-expanded={!!expanded[project.id]} onClick={toggleExpanded}>{expanded[project.id] ? <FolderOpenOutlinedIcon sx={{ fontSize: 18 }} /> : <FolderOutlinedIcon sx={{ fontSize: 18 }} />}</IconButton>
+          <IconButton className='sector7-nav-control sector7-nav-icon' size='sm' variant='plain' color='neutral' aria-label={`${expanded[project.id] ? 'Collapse' : 'Expand'} ${project.title}`} aria-expanded={!!expanded[project.id]} onClick={toggleExpanded}>{expanded[project.id] ? <OpenFolderIcon sx={{ fontSize: 18 }} /> : <FolderOutlinedIcon sx={{ fontSize: 18 }} />}</IconButton>
           <Button className='sector7-nav-control sector7-nav-project' size='sm' variant='plain' color='neutral' aria-expanded={!!expanded[project.id]} onClick={toggleExpanded} sx={{ flex: 1, overflow: 'hidden' }}>
             <Box component='span' sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.title}</Box>
           </Button>
