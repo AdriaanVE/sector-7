@@ -428,7 +428,7 @@ function ChatDrawer(props: {
 
       </OptimaDrawerList>
     </Box>
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, px: 2, py: 1, borderTop: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, px: 2, py: 1, flexShrink: 0 }}>
       {isMobile && <Button variant='plain' color='neutral' size='sm' startDecorator={<SettingsIcon sx={{ fontSize: 18 }} />} onClick={() => optimaOpenPreferences()}
         sx={{ flex: 1, justifyContent: 'flex-start', minHeight: { xs: 40, sm: 36 } }}>Settings</Button>}
       <Dropdown>

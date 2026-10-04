@@ -1,4 +1,3 @@
-import { PersonalSettings } from '~/common/personal/PersonalSettings';
 import * as React from 'react';
 
 import { Box, Button } from '@mui/joy';
@@ -6,21 +5,18 @@ import KeyboardCommandKeyOutlinedIcon from '@mui/icons-material/KeyboardCommandK
 
 import type { PreferencesTabId } from '~/common/layout/optima/store-layout-optima';
 import { AppBreadcrumbs } from '~/common/components/AppBreadcrumbs';
-import { DarkModeToggleButton, darkModeToggleButtonSx } from '~/common/components/DarkModeToggleButton';
+import { darkModeToggleButtonSx } from '~/common/components/DarkModeToggleButton';
 import { GoodModal } from '~/common/components/modals/GoodModal';
 import { useIsMobile } from '~/common/components/useMatchMedia';
-
-import { SettingsContent } from './SettingsContent';
-import { SettingsNavList } from './SettingsNavList';
-import { SettingsNavSelect } from './SettingsNavSelect';
-import { resolveSettingsNavId } from './settings.nav';
-
+import { PersonalSettings } from '~/common/personal/PersonalSettings';
 
 const _styles = {
 
-  // mobile: fullscreen, content flows and scrolls naturally
+  // mobile: fullscreen with a scrolling form and fixed title/footer
   modalMobile: {
     flexGrow: 1,
+    height: '100dvh',
+    maxHeight: '100dvh',
     backgroundColor: 'background.level1',
   },
 
@@ -30,54 +26,28 @@ const _styles = {
     backgroundColor: 'background.level1',
     width: 'min(780px, 94vw)',
     maxWidth: 'min(780px, 94vw)',
-    // minHeight: '620px', // 540px
-    // maxHeight: 'min(86svh, 720px)',
+    maxHeight: 'min(90dvh, 960px)',
   },
 
-  // desktop two-pane body: CSS grid with a fixed sidebar track + fluid content track.
-  // grid (not flex) so the sidebar width is honored regardless of Joy List's intrinsic flex-grow;
-  // minmax(0, 1fr) lets the content track shrink and scroll instead of overflowing horizontally.
-  // full-bleed so the sidebar/divider reach the dialog edges.
-  body: {
-    // backgroundColor: 'background.popup',
-    flex: 1,
-    minHeight: 0,
-    display: 'grid',
-    gridTemplateColumns: '192px minmax(0, 1fr)',
-    gridTemplateRows: 'minmax(0, 1fr)',
-    mx: 'calc(-1 * var(--Card-padding))',
-  },
-
-  content: {
-    backgroundColor: 'background.surface',
-    borderRadius: 'lg',
-    borderTopRightRadius: 0,
-    borderBottomRightRadius: 0,
-    boxShadow: 'md',
-    // boxShadow: 'inset 1px 1px 4px -2px rgba(0, 0, 0, 0.2)', // sync with PersonaDescriptionCard.tsx
-    // outline: '1px solid',
-    // outlineColor: 'divider',
-    minWidth: 0,
-    minHeight: 'max(490px, 45svh)',
-    overflowY: 'auto',
-    px: 'var(--Card-padding)', // was px: 3, py: 1.5
-    py: 2,
-    // mr: 'var(--Card-padding)',
-    // mb: 0.5,
-    zIndex: 1,
-  },
-
-  mobileBody: {
+  artworkBody: {
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
-  },
-
-  mobileContent: {
-    backgroundColor: 'background.surface',
-    mx: 'calc(-1 * var(--Card-padding))',
-    p: 'var(--Card-padding)',
-    // borderRadius: 'md',
-    boxShadow: 'xs',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundImage: 'url(/sector-7-settings-neon.webp)',
+      backgroundRepeat: 'no-repeat',
+      backgroundPosition: 'right top',
+      backgroundSize: { xs: '310px auto', sm: '440px auto' },
+      opacity: { xs: 0.1, sm: 0.16 },
+      pointerEvents: 'none',
+    },
+    '@media (forced-colors: active)': { '&::before': { display: 'none' } },
   },
 
   startButton: {
@@ -89,15 +59,7 @@ const _styles = {
 } as const;
 
 
-/**
- * Component that allows the User to modify the application settings,
- * persisted on the client via localStorage.
- *
- * Layout: a master-detail navigation. Desktop shows an always-expanded tree on the left and a
- * scrollable detail pane on the right; mobile shows a top section selector with content below.
- * The external `tab` (PreferencesTabId, incl. legacy aliases) is resolved to a nav node here, so
- * callers keep using `optimaOpenPreferences('voice'|'draw'|...)` unchanged.
- */
+/** Personal settings persist locally; artwork stays behind the scrollable form. */
 export function SettingsModal(props: {
   open: boolean,
   tab: PreferencesTabId,
@@ -108,10 +70,6 @@ export function SettingsModal(props: {
 
   // external state
   const isMobile = useIsMobile();
-
-  // derived nav state
-  const { setTab } = props;
-  const nodeId = resolveSettingsNavId(props.tab);
 
   return (
     <GoodModal
@@ -135,7 +93,9 @@ export function SettingsModal(props: {
       sx={isMobile ? _styles.modalMobile : _styles.modalDesktop}
     >
 
-      <Box sx={{ p: 2, overflow: 'auto' }}><PersonalSettings /></Box>
+      <Box sx={_styles.artworkBody}>
+        <Box sx={{ position: 'relative', p: 2, minHeight: 0, overflow: 'auto' }}><PersonalSettings /></Box>
+      </Box>
 
     </GoodModal>
   );

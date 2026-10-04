@@ -22,6 +22,10 @@ Stop uses the brand board's neon purple with a small rounded square inside the s
 36px/40px control as send. Hover brightens the fill and adds a soft purple glow; keyboard focus
 keeps a visible ring. Reduced motion and forced colors retain accessible static states.
 
+The focus-triggered LED tracing segment spans 15% of the composer rim and completes its
+purple pass in 2.4 seconds, slightly longer than the original 12% / 2-second effect.
+Reduced motion keeps only the static border.
+
 Shortcuts are off by default. UX Labs migration version 3 turns them off once for existing
 users while preserving the older adaptive-rendering migration. Labs can restore the row.
 Its former X now collapses and expands the composer; the draft stays mounted and preserved.
