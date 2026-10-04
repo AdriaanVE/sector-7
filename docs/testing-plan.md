@@ -49,6 +49,4 @@ The prepared test command uses `node --import tsx`, avoiding the tsx CLI IPC soc
 
 ## Main enforcement
 
-GitHub reports that this private repository requires GitHub Pro or public visibility for branch protection and rulesets. Both read APIs return HTTP 403 with that message. A workflow alone cannot enforce merges.
-
-The intended setting requires `Quality gate`, requires the branch to be current, and applies to administrators. The current request authorizes configuring that gate if supported. Do not change repository visibility or subscriptions. Verify the actual GitHub run after pushing and report the enforcement restriction if it remains.
+The initial private-repository account plan blocked protection with HTTP 403. The user subsequently authorized public visibility on 2026-10-04. The repository is now public and `main` protection requires the GitHub Actions `Quality gate` check, current branches and administrators. Force-pushes and deletion are disabled. The implementation CI run passed. No subscription change was needed.
