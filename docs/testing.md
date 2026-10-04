@@ -60,6 +60,6 @@ Remaining limitations: browser acceptance, React Stop/reload, actual native choo
 
 `.github/workflows/ci.yml` runs on branch pushes, PRs to `main` and manual dispatch. It installs locked dependencies, checks committed whitespace and runs `npm run precommit` on the supported macOS runner. The job has read-only repository permissions and a 20-minute timeout.
 
-Require the exact check name **Quality gate** on `main`, enable up-to-date branches and include administrators. The current GitHub account plan blocks branch protection for this private repository: the authorized update returned HTTP 403, "Upgrade to GitHub Pro or make this repository public to enable this feature." Until that restriction is resolved, CI runs but merges are not technically blocked. Repository visibility and subscription were not changed.
+`main` requires the exact check name **Quality gate**, issued by GitHub Actions, and an up-to-date branch. Protection applies to administrators. Force-pushes and branch deletion are disabled. The user made the repository public on 2026-10-04, resolving the earlier private-repository account-plan restriction. Protection was verified through the GitHub API. [The implementation CI run](https://github.com/AdriaanVE/sector-7/actions/runs/37198942304) passed types, lint and 204 tests with 22 network skips.
 
 The [reviewed plan](testing-plan.md) records the scope. The [change record](change_details/2026-10-04-test-quality-gate.md) records verification and review results.
