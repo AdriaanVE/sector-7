@@ -28,6 +28,7 @@ export function PersonalSettings() {
     </Box>
     <Box component='section' sx={{ display: 'grid', gap: 1.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
       <Typography level='title-md'>Conversation</Typography>
+      <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>Every chat can manage skills in ~/.claude and ~/.codex and run local commands with the app’s permissions. Projects add their connected folders.</Typography>
       <Checkbox label='Show all tool calls' checked={settings.showToolCalls} onChange={event => settings.setShowToolCalls(event.target.checked)} />
       <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>Show tool inputs, results and logs in messages. Hidden by default; a concise activity line shows what is happening.</Typography>
     </Box>

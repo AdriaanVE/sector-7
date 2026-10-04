@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, readdir, stat, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { authorizeFolder, executeFolderTool, validateFolderPath } from './folders';
+import { authorizeFolder, authorizeFolderInvocation, executeFolderTool, validateFolderPath } from './folders';
+import { createDMessageFromFragments } from '~/common/stores/chat/chat.message';
+import { create_FunctionCallInvocation_ContentFragment } from '~/common/stores/chat/chat.fragments';
 import { withFolderReceipt } from './folder-receipts';
 import { commitWorkspace } from './workspace';
 import { emptyWorkspace } from '~/common/personal/workspace-schema';
@@ -110,5 +112,42 @@ test('large writes retain full file bytes but return a bounded change preview', 
     assert.equal(await readFile(join(root, 'large.txt'), 'utf8'), text);
     assert.ok(JSON.stringify(result).length < 5000);
     assert.equal((result.diff as { truncated: boolean }).truncated, true);
+  } finally { await rm(temp, { recursive: true, force: true }); }
+});
+
+test('default skill folders work without a project and still require saved chats and invocations', async () => {
+  const temp = await mkdtemp(join(tmpdir(), 'default-skill-folders-'));
+  const home = join(temp, 'home'); const data = join(temp, 'app');
+  const workspace = emptyWorkspace();
+  const message = createDMessageFromFragments('assistant', [
+    create_FunctionCallInvocation_ContentFragment('claude-call', 'folder_write', JSON.stringify({ folder_id: 'local-claude', path: 'SKILL.md', text: 'Claude skill' })),
+    create_FunctionCallInvocation_ContentFragment('codex-call', 'folder_write', JSON.stringify({ folder_id: 'local-codex', path: 'SKILL.md', text: 'Codex skill' })),
+  ]);
+  workspace.stores['app-chats'] = { version: 5, state: { conversations: [{ id: 'chat', messages: [message], created: 0, updated: null, tokenCount: 0, systemPurposeId: '' }] } };
+  try {
+    await assert.rejects(authorizeFolder(undefined, 'chat', 'local-claude', data, home), { status: 403 });
+    await commitWorkspace(workspace, 0, data);
+    for (const [folderId, callId, name, text] of [['local-claude', 'claude-call', '.claude', 'Claude skill'], ['local-codex', 'codex-call', '.codex', 'Codex skill']]) {
+      await assert.rejects(authorizeFolderInvocation(undefined, 'other-chat', folderId, callId, 'folder_write', data, home), { status: 403 });
+      await assert.rejects(authorizeFolderInvocation(undefined, 'chat', folderId, 'unsaved-call', 'folder_write', data, home), { status: 403 });
+      await assert.rejects(stat(join(home, name)), { code: 'ENOENT' });
+      const { folder, args } = await authorizeFolderInvocation(undefined, 'chat', folderId, callId, 'folder_write', data, home);
+      assert.equal(folder.path, await realpath(join(home, name)));
+      assert.equal((await stat(folder.path)).mode & 0o777, 0o700);
+      await executeFolderTool(folder, { ...args, name: 'folder_write' }, undefined, data);
+      assert.equal(await readFile(join(home, name, 'SKILL.md'), 'utf8'), text);
+      const credentialFile = name === '.claude' ? '.credentials.json' : 'auth.json';
+      await writeFile(join(folder.path, credentialFile), '{"token":"test-only"}');
+      await assert.rejects(executeFolderTool(folder, { name: 'folder_read', folder_id: folderId, path: credentialFile }, undefined, data), { status: 403 });
+      assert.deepEqual((await executeFolderTool(folder, { name: 'folder_list', folder_id: folderId }, undefined, data)).entries, [{ name: 'SKILL.md', type: 'file' }]);
+    }
+    await assert.rejects(authorizeFolder(undefined, 'chat', 'unknown', data, home), { status: 403 });
+    await assert.rejects(authorizeFolderInvocation(undefined, 'chat', 'local-codex', 'claude-call', 'folder_write', data, home), { status: 403 });
+    // Existing default root symlinks resolve to the same canonical path as connected project folders.
+    await rm(join(home, '.claude'), { recursive: true });
+    await mkdir(join(home, 'claude-target')); await symlink(join(home, 'claude-target'), join(home, '.claude'));
+    const linked = await authorizeFolder(undefined, 'chat', 'local-claude', data, home);
+    assert.equal(linked.path, await realpath(join(home, 'claude-target')));
+    assert.deepEqual((await executeFolderTool(linked, { name: 'folder_list', folder_id: linked.id }, undefined, data)).entries, []);
   } finally { await rm(temp, { recursive: true, force: true }); }
 });

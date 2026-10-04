@@ -14,7 +14,7 @@ export function localToolPhase(name: string): Phase {
     default: return 'Editing files';
   }
 }
-export async function dispatchLocalTool(call: { id: string; name: string; args: string }, projectId: string, conversationId: string, signal: AbortSignal, onOutput?: (text: string) => void): Promise<Record<string, unknown>> {
+export async function dispatchLocalTool(call: { id: string; name: string; args: string }, projectId: string | undefined, conversationId: string, signal: AbortSignal, onOutput?: (text: string) => void): Promise<Record<string, unknown>> {
   await flushDisk(); signal.throwIfAborted();
   const args = JSON.parse(call.args);
   if (call.name !== 'local_command') return localJSON('folders', { method: 'POST', signal, body: JSON.stringify({ projectId, conversationId, invocationId: call.id, input: folderToolInput.parse({ ...args, name: call.name }) }) });
