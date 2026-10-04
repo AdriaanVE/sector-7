@@ -29,14 +29,16 @@ export async function llmsRefreshStaleServicesOnBoot(remoteServices: boolean, ex
   // begin the boot refresh
   _bootRefreshRunning = true;
   const initiallyEmpty = !llmsStoreState().llms?.length;
-  for (const service of llmsStoreState().sources.filter(service => service.vId === 'anthropic'))
-    llmsStoreActions().updateServiceSettings(service.id, { anthropicKey: '', anthropicHost: '', csf: false });
+  for (const service of llmsStoreState().sources.filter(service => ['anthropic', 'openai'].includes(service.vId))) {
+    if (service.vId === 'anthropic') llmsStoreActions().updateServiceSettings(service.id, { anthropicKey: '', anthropicHost: '', csf: false });
+    else llmsStoreActions().updateServiceSettings(service.id, { oaiKey: '', oaiHost: '', oaiOrg: '', csf: false });
+  }
 
   // add the backend services (idempotent)
   const createdServiceIds = new Set<DModelsServiceId>();
   if (remoteServices)
     findAllModelVendors()
-      .filter(vendor => vendor.id === 'anthropic')
+      .filter(vendor => ['anthropic', 'openai'].includes(vendor.id))
       .forEach(remoteVendor => {
 
         // create the first service for this vendor, if missing
@@ -50,7 +52,7 @@ export async function llmsRefreshStaleServicesOnBoot(remoteServices: boolean, ex
   // (unknown vendors, e.g. data from a newer app, are left alone)
   const staleServiceIds = llmsStoreState().sources
     .filter((service: DModelsService) => {
-      if (service.vId !== 'anthropic') return false;
+      if (!['anthropic', 'openai'].includes(service.vId)) return false;
       if (!findModelVendor(service.vId)) return false; // exclude unknown vendors: data from a newer app, left alone
       if (createdServiceIds.has(service.id)) return true; // include just created: first listing
       return true; // include when model definitions changed since its last listing

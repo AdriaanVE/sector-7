@@ -4,13 +4,13 @@ import { findAllChatCommands } from '../../../commands/commands.registry';
 import type { ActileItem, ActileProvider, ActileProviderItems } from './ActileProvider';
 
 type CatalogSkill = { id: string; origin: string; name: string; description: string; unsupported: string[] };
-export const providerCommands = (onCommandSelect: (item: ActileItem, searchPrefix: string) => void, model: string): ActileProvider => ({
+export const providerCommands = (onCommandSelect: (item: ActileItem, searchPrefix: string) => void, model: string, conversationId?: string | null): ActileProvider => ({
   key: 'pcmd',
   get label() { return 'Commands and local skills'; },
   fastCheckTriggerText: trailingText => trailingText === '/',
   fetchItems: async (): ActileProviderItems => {
     const origin = skillOriginForModel(model);
-    const { skills } = origin ? await localJSON(`skills?origin=${origin}`) : { skills: [] };
+    const { skills } = origin ? await localJSON(`skills?origin=${origin}${conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : ''}`) : { skills: [] };
     return { searchPrefix: '/', items: [
       ...skills.map((skill: CatalogSkill) => ({ key: `skill:${skill.id}`, providerKey: 'pcmd' as const,
         label: `/${skill.name}:${skill.origin}`, description: skill.description + (skill.unsupported.length ? ' - instruction-only, tools unavailable' : '') })),

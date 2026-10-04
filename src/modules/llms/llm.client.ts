@@ -1,4 +1,5 @@
 import { hasGoogleAnalytics, sendGAEvent } from '~/common/components/3rdparty/GoogleAnalytics';
+import { CLAUDE_CHAT_MODELS } from '~/common/personal/chat-config';
 
 import type { DModelsService, DModelsServiceId } from '~/common/stores/llms/llms.service.types';
 import { DLLM, DLLMId, DModelInterfaceV1, LLM_IF_HOTFIX_NoTemperature, LLM_IF_OAI_Chat, LLM_IF_OAI_Fn } from '~/common/stores/llms/llms.types';
@@ -139,7 +140,7 @@ function _createDLLMFromModelDescription(d: ModelDescriptionSchema, service: DMo
   const dllm: DLLM = {
 
     // this id is Big-AGI specific, not the vendor's
-    id: service.vId === 'anthropic' && ['claude-opus-5-5', 'claude-sonnet-5-5'].includes(d.id) ? d.id : `${service.id}-${_clientIdWithVariant(d.id, d.idVariant)}`,
+    id: (service.vId === 'anthropic' && CLAUDE_CHAT_MODELS.some(id => id === d.id)) || (service.vId === 'openai' && d.id === 'gpt-6.1-sol') ? d.id : `${service.id}-${_clientIdWithVariant(d.id, d.idVariant)}`,
 
     // factory properties
     label: d.label,

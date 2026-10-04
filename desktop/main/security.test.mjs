@@ -16,3 +16,14 @@ test('config has stable origin, preserves data defaults and rejects credential f
   assert.equal(validateConfig({ dataDir: '/tmp/workspace' }, { SECTOR7_DESKTOP_PORT: '47101' }).port, 47101);
   for (const value of [{ port: 0 }, { port: 'invalid' }, { dataDir: 'relative' }, { bifrost: { apiKey: 'secret' } }, { token: 'secret' }, { bifrost: { baseUrl: 'https://user:secret@host/' } }]) assert.throws(() => validateConfig(value, {}));
 });
+
+test('Sol gateway uses its independent default, config and environment precedence', () => {
+  const opus = { baseUrl: 'https://opus.example.test/anthropic' };
+  assert.equal(validateConfig({ bifrost: opus }, {}).bifrost.openaiBaseUrl, 'https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/openai');
+  const config = { bifrost: { ...opus, openaiBaseUrl: 'https://configured-sol.example.test/openai/' } };
+  assert.equal(validateConfig(config, {}).bifrost.openaiBaseUrl, 'https://configured-sol.example.test/openai');
+  assert.equal(validateConfig(config, { BIFROST_OPENAI_BASE_URL: 'https://override-sol.example.test/openai/' }).bifrost.openaiBaseUrl, 'https://override-sol.example.test/openai');
+  for (const openaiBaseUrl of ['https://user:secret@host/', 'file:///tmp/gateway', 'https://host/?key=secret', 'https://host/#secret']) {
+    assert.throws(() => validateConfig({ bifrost: { openaiBaseUrl } }, {}));
+  }
+});
