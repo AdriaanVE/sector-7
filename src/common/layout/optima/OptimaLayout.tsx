@@ -22,6 +22,7 @@ import { scratchClipSupported } from './scratchclip/store-scratchclip';
 import { useGlobalClipboardSaver } from './scratchclip/useGlobalClipboardSaver';
 
 import { OptimaBar } from './bar/OptimaBar';
+import { useOptimaPortalOutRef } from './portals/useOptimaPortalOutRef';
 import { useOptimaPortalHasInputs } from './portals/useOptimaPortalHasInputs';
 import { DesktopDrawer } from './drawer/DesktopDrawer';
 
@@ -31,6 +32,13 @@ import { MobileDrawer } from './drawer/MobileDrawer';
 import { Modals } from './Modals';
 import { PageWrapper } from './PageWrapper';
 import { optimaActions, optimaOpenModels, optimaOpenPreferences, optimaToggleDrawer, optimaTogglePanel, useOptimaChromeless, useOptimaDrawerOpen } from './useOptima';
+
+
+function DesktopNavActions() {
+  const navActionsRef = useOptimaPortalOutRef('optima-portal-nav', 'DesktopNavActions');
+  const hasActions = useOptimaPortalHasInputs('optima-portal-nav');
+  return <Box ref={navActionsRef} sx={{ display: hasActions ? 'flex' : 'none', justifyContent: 'center' }} />;
+}
 
 
 // this undoes the PanelGroup styling on mobile, as it's not needed
@@ -112,6 +120,7 @@ export function OptimaLayout(props: { suspendAutoModelsSetup?: boolean, children
       {!isMobile && <Box component='nav' aria-label='Main navigation' sx={{ width: 52, flexShrink: 0, position: 'relative', zIndex: themeZIndexDesktopNav, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, py: 1, bgcolor: '#060F14', borderRight: '1px solid', borderColor: 'divider', '& button, & a': { '--IconButton-size': '36px', color: 'text.secondary', '&:hover': { transform: 'none', boxShadow: 'none', color: 'text.primary' }, '&:focus-visible': { outline: '2px solid var(--joy-palette-focusVisible)', outlineOffset: 2 } }, '@media (forced-colors: active)': { '& :focus-visible': { outlineColor: 'Highlight' } } }}>
         <Tooltip title='Chats'><IconButton component={Link} href='/' onClick={event => { if (route === '/') event.preventDefault(); }} aria-label='Chats' aria-current={route === '/' ? 'page' : undefined} variant={route === '/' ? 'soft' : 'plain'} color='neutral'><HomeOutlinedIcon sx={{ fontSize: 20 }} /></IconButton></Tooltip>
         <Box sx={{ flex: 1 }} />
+        <DesktopNavActions />
         <Tooltip title='Settings'><IconButton aria-label='Settings' variant='plain' color='neutral' onClick={() => optimaOpenPreferences()}><SettingsIcon sx={{ fontSize: 20 }} /></IconButton></Tooltip>
       </Box>}
       <Box sx={{ flex: 1, minWidth: 0, display: isMobile ? 'block' : 'flex', flexDirection: 'column', '--Optima-header-height': !isMobile && !isChromeless ? '56px' : '0px' }}>

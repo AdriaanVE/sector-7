@@ -25,6 +25,7 @@ import { DebouncedInputMemo } from '~/common/components/DebouncedInput';
 import { FoldersToggleOff } from '~/common/components/icons/FoldersToggleOff';
 import { FoldersToggleOn } from '~/common/components/icons/FoldersToggleOn';
 import { OPTIMA_DRAWER_BACKGROUND } from '~/common/layout/optima/optima.config';
+import { OptimaNavIn } from '~/common/layout/optima/portals/OptimaPortalsIn';
 import { OptimaDrawerList } from '~/common/layout/optima/drawer/OptimaDrawerList';
 import { capitalizeFirstLetter } from '~/common/util/textUtils';
 import { getIsMobile, useIsMobile } from '~/common/components/useMatchMedia';
@@ -156,6 +157,20 @@ function ChatDrawer(props: {
     // null conversationId is fine: the dialog disables the single-chat buttons and still offers the all-chats/flash backups
     onConversationsExportDialog(props.activeConversationId, true);
   }, [onConversationsExportDialog, props.activeConversationId]);
+
+
+  const chatDataMenu = <Dropdown>
+    <Tooltip title='Import and export chats'>
+      <MenuButton variant='plain' color='neutral' size='sm' aria-label='Import and export chats' sx={{ minWidth: isMobile ? 44 : 36, minHeight: isMobile ? 44 : 36, px: 0.5 }}>
+        <FileDownloadOutlinedIcon sx={{ fontSize: 20 }} />
+      </MenuButton>
+    </Tooltip>
+    <Menu placement={isMobile ? 'top-end' : 'top-start'} sx={{ zIndex: themeZIndexOverMobileDrawer }}>
+      <MenuItem onClick={props.onConversationsImportDialog}><ListItemDecorator><FileDownloadOutlinedIcon /></ListItemDecorator>Import chats</MenuItem>
+      <MenuItem onClick={handleConversationsExport}><ListItemDecorator><FileUploadOutlinedIcon /></ListItemDecorator>Export chats</MenuItem>
+      <MenuItem color='danger' disabled={filteredChatsAreEmpty} onClick={handleConversationsDeleteFiltered}><ListItemDecorator><DeleteOutlineIcon /></ListItemDecorator>Delete {filteredChatsCount >= 2 ? `all ${filteredChatsCount} chats` : 'chat'}</MenuItem>
+    </Menu>
+  </Dropdown>;
 
 
   // Folder change request
@@ -428,18 +443,11 @@ function ChatDrawer(props: {
 
       </OptimaDrawerList>
     </Box>
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, px: 2, py: 1, flexShrink: 0 }}>
-      {isMobile && <Button variant='plain' color='neutral' size='sm' startDecorator={<SettingsIcon sx={{ fontSize: 18 }} />} onClick={() => optimaOpenPreferences()}
-        sx={{ flex: 1, justifyContent: 'flex-start', minHeight: { xs: 40, sm: 36 } }}>Settings</Button>}
-      <Dropdown>
-        <MenuButton variant='plain' color='neutral' size='sm' aria-label='Chat data actions'><MoreVertIcon sx={{ fontSize: 20 }} /></MenuButton>
-        <Menu sx={{ zIndex: themeZIndexOverMobileDrawer }}>
-          <MenuItem onClick={props.onConversationsImportDialog}><ListItemDecorator><FileDownloadOutlinedIcon /></ListItemDecorator>Import chats</MenuItem>
-          <MenuItem onClick={handleConversationsExport}><ListItemDecorator><FileUploadOutlinedIcon /></ListItemDecorator>Export chats</MenuItem>
-          <MenuItem color='danger' disabled={filteredChatsAreEmpty} onClick={handleConversationsDeleteFiltered}><ListItemDecorator><DeleteOutlineIcon /></ListItemDecorator>Delete {filteredChatsCount >= 2 ? `all ${filteredChatsCount} chats` : 'chat'}</MenuItem>
-        </Menu>
-      </Dropdown>
-    </Box>
+    {isMobile ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 2, py: 1, flexShrink: 0 }}>
+      <Button variant='plain' color='neutral' size='sm' startDecorator={<SettingsIcon sx={{ fontSize: 18 }} />} onClick={() => optimaOpenPreferences()}
+        sx={{ flex: 1, justifyContent: 'flex-start', minHeight: 40 }}>Settings</Button>
+      {chatDataMenu}
+    </Box> : <OptimaNavIn>{chatDataMenu}</OptimaNavIn>}
 
     {/* [Menu] Chat Item Folder Change */}
     {!!folderChangeRequest?.anchorEl && (
