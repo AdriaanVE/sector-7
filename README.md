@@ -84,7 +84,27 @@ Local builds use ad-hoc signing. There is no Developer ID signature or notarizat
 
 Once the workflow is available on `main`, open **Actions > Build Mac app > Run workflow** and select **main**. This separate manual action runs the web quality gate and desktop checks, then builds the Apple silicon app and DMG. Download its artifacts from the completed run; they are retained for 14 days.
 
-The app is zipped with `ditto` to preserve bundle permissions. The workflow uses ad-hoc signing and does not publish a GitHub release. Runs on other branches are skipped. Hosted execution still needs verification after the workflow reaches `main`.
+The app is zipped with `ditto` to preserve bundle permissions. Runs on other branches are skipped. Hosted execution still needs verification after the workflow reaches `main`.
+
+### Homebrew installation and updates
+
+Every manual **Build Mac app** run publishes its build for Homebrew. Configure a GitHub environment named `release`, restrict its deployment branches to `main`, and store `SECTOR7_RELEASE_TOKEN` there. Use a fine-grained token scoped to this repository with Contents and Pull requests write permissions. It lets the cask PR trigger the required CI checks. Local `npm run desktop:build` does not publish.
+
+After a successful build, the action publishes the ZIP and DMG under `desktop-v<version>` and opens a PR adding or updating `Casks/sector-7.rb` with the ZIP's SHA-256. Merge that cask PR manually. After the first cask PR reaches `main`:
+
+```sh
+brew tap AdriaanVE/sector-7 https://github.com/AdriaanVE/sector-7
+brew install --cask sector-7
+```
+
+Quit Sector 7 before updating:
+
+```sh
+brew update
+brew upgrade --cask sector-7
+```
+
+Homebrew installs the app in Applications. `brew uninstall --cask sector-7` preserves chats, projects, configuration and logs. The cask supports Apple silicon on macOS 13 or later. Builds are ad-hoc signed and may need macOS approval when downloaded; upgrades may prompt again for folder, microphone or Keychain access. The workflow never republishes an existing version; run `npm version patch --prefix desktop --no-git-tag-version` before publishing another update. The first hosted release and Homebrew installation remain unverified. See [desktop setup](docs/electron-mac.md).
 
 ## Bifrost connection
 
