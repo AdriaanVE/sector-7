@@ -1,5 +1,10 @@
 # Chat action menu
 
+The desktop header spans the sidebar and chat: S7 logo/title, collapse/expand and active
+chat title share one horizontal rail. The brand and toggle remain visible when the sidebar
+closes. The vertical Home/settings rail remains, with its redundant hamburger removed.
+Mobile keeps its own drawer header and existing top bar.
+
 The active chat row uses one three-dot menu instead of a separate action-icon row. The trigger
 appears on hover, keyboard focus or while its menu is open, and remains visible on touch
 screens. Folder assignment, rename, automatic title, duplicate and export keep their actions.
