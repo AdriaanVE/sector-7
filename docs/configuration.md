@@ -10,7 +10,7 @@ All commands run from the repository root. Version 0.1 supports a local Mac brow
 | `BIFROST_OPENAI_BASE_URL` | OpenAI-compatible Bifrost endpoint for GPT-6.1 Sol Responses. Defaults independently to `https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/openai`. |
 | `BIFROST_KEYCHAIN_ACCOUNT` | Keychain account; default `adriaan.van.erps`. |
 | `BIFROST_KEYCHAIN_SERVICE` | Keychain service; default `telenet-bifrost-dev-virtual-key`. |
-| `AI_GUI_DATA_DIR` | Durable workspace directory. Default `~/Library/Application Support/AI GUI`. |
+| `AI_GUI_DATA_DIR` | Workspace directory override in any mode. Development defaults to `sector-7-dev` inside the OS temporary directory; production and installed Electron builds default to `~/Library/Application Support/AI GUI`. |
 | `NEXT_PUBLIC_BUILD_HASH` | Build identity for source archives without Git; use `v0.1.0`. |
 
 Use macOS Keychain Access to store the existing gateway key, or inject it through your shell environment. The local launcher maps the same virtual key to the Anthropic and OpenAI adapters on the server. Client credentials, client endpoints and browser-direct requests are disabled for both. Do not put keys in the browser or commit environment files. Restart the local app with the launcher after changing endpoint configuration.
@@ -21,7 +21,7 @@ GPT-6.1 Sol requires `/v1/responses` for function tools. Its five effort levels 
 
 Leave analytics settings `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_GA4_MEASUREMENT_ID` unset for the personal local app. No login, Google SSO or cloud sync is required. Browser dictation remains Chrome Web Speech, which sends audio to Google. Dedicated voice and image model connections are deferred.
 
-One server and one browser profile are recommended during this preview. Cross-process workspace locking and clearer stale-profile recovery remain acceptance work. Back up from Settings before changing data directories or testing migration. Keep the legacy directory after the Sector 7 rename to retain existing chats.
+One server and one browser profile are recommended during this preview. Cross-process workspace locking and clearer stale-profile recovery remain acceptance work. Back up from Settings before changing data directories or testing migration. `next dev`, including `just up`, uses a separate temporary workspace. `next start` and installed Electron builds keep the legacy directory after the Sector 7 rename to retain existing chats. Development data survives ordinary restarts but can be removed by system temporary-file cleanup. Set `AI_GUI_DATA_DIR` to a persistent development folder when needed. Switching defaults does not move existing data; restore a backup into the new folder to copy it explicitly.
 
 ## Electron desktop
 
