@@ -341,11 +341,11 @@ function ChatDrawer(props: {
 
   return <>
 
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 56, px: 2, flexShrink: 0 }}>
+    {isMobile && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 56, px: 2, flexShrink: 0 }}>
       <Box component='img' src='/icons/icon-192x192.png' alt='' width={28} height={28} />
       <Typography level='title-md' sx={{ flex: 1, fontWeight: 650, letterSpacing: '.015em' }}>Sector 7</Typography>
       <IconButton aria-label='Collapse sidebar' title='Collapse sidebar' size='sm' variant='plain' color='neutral' onClick={optimaCloseDrawer}><LayoutSidebarRight sx={{ fontSize: 20, transform: 'rotate(180deg)' }} /></IconButton>
-    </Box>
+    </Box>}
     <Box sx={{ display: 'grid', gap: 1, mx: 2, mt: 1, mb: 1.5, flexShrink: 0 }}>
       <Button variant='outlined' color='neutral' disabled={disableNewButton} onClick={handleButtonNew} startDecorator={<AddIcon sx={{ fontSize: 18 }} />}
         sx={{ justifyContent: 'flex-start', minHeight: { xs: 40, sm: 36 }, px: 1.25, '&:hover': { borderColor: '#A855F7', transform: 'none', boxShadow: 'none' } }}>
