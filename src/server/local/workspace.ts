@@ -1,5 +1,5 @@
 import { open, mkdir, readFile, rename, stat, copyFile, readdir, rm } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync, strToU8, strFromU8 } from 'fflate';
 import { Readable } from 'node:stream';
@@ -11,7 +11,11 @@ export class WorkspaceError extends Error {
   constructor(message: string, public status = 409) { super(message); }
 }
 
-export function dataDirectory() { return process.env.AI_GUI_DATA_DIR || join(homedir(), 'Library', 'Application Support', 'AI GUI'); }
+export function dataDirectory() {
+  return process.env.AI_GUI_DATA_DIR || (process.env.NODE_ENV === 'development'
+    ? join(tmpdir(), 'sector-7-dev')
+    : join(homedir(), 'Library', 'Application Support', 'AI GUI'));
+}
 
 async function atomicWrite(path: string, bytes: Uint8Array | string) {
   const temporary = `${path}.${crypto.randomUUID()}.tmp`;

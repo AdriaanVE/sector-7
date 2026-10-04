@@ -47,6 +47,37 @@ function workspaceWithChat() {
   return workspace;
 }
 
+test('development HTTP workspace stays separate from installed data and survives reloads', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'sector7-storage-modes-'));
+  const previous = Object.fromEntries(['HOME', 'TMPDIR', 'NODE_ENV', 'AI_GUI_DATA_DIR'].map(name => [name, process.env[name]]));
+  Object.assign(process.env, { HOME: root, TMPDIR: root, NODE_ENV: 'development' });
+  delete process.env.AI_GUI_DATA_DIR;
+  t.after(async () => {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const development = await getWorkspace(request());
+  assert.equal(development.status, 200);
+  assert.deepEqual(await development.json(), { workspace: null, directory: join(root, 'sector-7-dev') });
+  assert.equal((await putWorkspace(request({ workspace: workspaceWithChat(), expectedRevision: 0 }))).status, 200);
+
+  Object.assign(process.env, { NODE_ENV: 'production' });
+  const installed = await getWorkspace(request());
+  assert.equal(installed.status, 200);
+  assert.deepEqual(await installed.json(), { workspace: null, directory: join(root, 'Library', 'Application Support', 'AI GUI') });
+  assert.equal((await putWorkspace(request({ workspace: emptyWorkspace(), expectedRevision: 0 }))).status, 200);
+
+  Object.assign(process.env, { NODE_ENV: 'development' });
+  assert.equal((await savedWorkspace()).stores['app-chats'].state.conversations[0].userTitle, 'Saved conversation');
+
+  Object.assign(process.env, { NODE_ENV: 'production', AI_GUI_DATA_DIR: join(root, 'sector-7-dev') });
+  assert.equal((await savedWorkspace()).stores['app-chats'].state.conversations[0].userTitle, 'Saved conversation');
+});
+
 test('workspace HTTP save makes the chat and project retrievable at the next revision', async t => {
   await storage(t);
   const workspace = workspaceWithChat();
