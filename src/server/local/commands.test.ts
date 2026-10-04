@@ -272,3 +272,19 @@ test('command HTTP route runs in a default skill folder without a project and re
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('desktop command subprocesses do not inherit API credentials or Electron runtime flags', async () => {
+  const { root, manager } = await fixture();
+  const keys = ['SECTOR7_DESKTOP_TOKEN', 'ELECTRON_RUN_AS_NODE', 'ANTHROPIC_API_KEY'];
+  const before = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  for (const key of keys) process.env[key] = 'desktop-test-value';
+  try {
+    const result = await done(manager, await manager.start({ scope: 'chat', invocationId: 'desktop-env', root,
+      command: 'for name in SECTOR7_DESKTOP_TOKEN ELECTRON_RUN_AS_NODE ANTHROPIC_API_KEY; do if printenv "$name"; then exit 9; fi; done; printf clean' }));
+    assert.equal(result.status, 'succeeded');
+    assert.equal(result.chunks.map(chunk => chunk.text).join(''), 'clean');
+  } finally {
+    for (const key of keys) if (before[key] === undefined) delete process.env[key]; else process.env[key] = before[key];
+    manager.shutdown(); await rm(root, { recursive: true, force: true });
+  }
+});

@@ -4,6 +4,20 @@ Personal local Claude workspace, built by remodeling the MIT-licensed [big-AGI](
 
 Version **0.1.0** is an early working preview. It keeps big-AGI's Next.js, React, Joy UI, Zustand and AIX engine, with a simpler chat layout and deep-night and mako-green styling based on the Sector 7 brand board.
 
+## Mac app
+
+Build a local Electron app with a bundled backend and the S7 icon:
+
+```sh
+npm ci
+npm run desktop:setup
+npm run desktop:build
+npm run desktop:install
+open "desktop/local/Sector 7.app"
+```
+
+The installed app needs no separate Node, npm or browser server. It uses the existing Bifrost Keychain entry and preserves the workspace at `~/Library/Application Support/AI GUI`. Apple silicon is supported for v0.1. The build requires Xcode Command Line Tools, Python and Node 22, 24 or 26. [Desktop setup and configuration](docs/electron-mac.md).
+
 ## Start on your Mac
 
 Use Node 22, 24 or 26 and npm. On macOS, the disk-lock dependency compiles during installation and requires existing Xcode Command Line Tools and Python. Use the same Node major version for installation and running the app. Clone the complete repository, then run from its root:
