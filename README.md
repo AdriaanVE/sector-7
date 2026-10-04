@@ -135,13 +135,13 @@ Local commands run with the app's process permissions and can access locations b
 
 ## Data, backups and privacy
 
-The durable workspace remains at:
+Production browser servers and installed Electron builds keep their durable workspace at:
 
 ```text
 ~/Library/Application Support/AI GUI
 ```
 
-The historical directory name is intentional: the Sector 7 rename preserves existing chats and projects. Set `AI_GUI_DATA_DIR` to choose another directory; the desktop config also accepts `dataDir`.
+Development (`just up` or `next dev`) uses `sector-7-dev` inside the operating system temporary directory. The folder is reused across restarts but can be removed by system cleanup. The historical production directory name preserves existing chats and projects. Set `AI_GUI_DATA_DIR` to override either location; the desktop config also accepts `dataDir`. Existing workspace files are not moved automatically.
 
 Browser caches and the Electron profile are disposable. Electron stores its profile/configuration under `~/Library/Application Support/Sector 7`; logs are under `~/Library/Logs/Sector 7`. The desktop app protects its loopback backend with a per-launch token.
 
