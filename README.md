@@ -4,7 +4,7 @@ A local AI workspace for macOS, built from the MIT-licensed [big-AGI](https://gi
 
 ![Sector 7 chat interface](docs/sector-7.png)
 
-Version **0.1.0** is a working preview. Run it in a browser with a local server, or build the Electron app for Apple silicon. Both use the same disk-backed workspace and server-configured Bifrost connection. No app account or cloud sync is required.
+Version **0.1.0** is a working preview. Run it in a browser with a local server, or build the Electron app for Apple silicon. Both use the same disk-backed workspace and server-configured Bifrost connection. No app account or cloud sync is required. See the [Sector 7 changelog](CHANGELOG.md) for release changes.
 
 ## Features
 
