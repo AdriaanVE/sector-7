@@ -2,7 +2,7 @@ import { gcProjectCache } from './project-gc';
 import { ChatAttentionIndicator } from './ChatAttention';
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Alert, Box, Button, Dropdown, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalDialog, Textarea, Typography } from '@mui/joy';
+import { Alert, Box, Button, Checkbox, Dropdown, IconButton, Input, Menu, MenuButton, MenuItem, Modal, ModalDialog, Textarea, Typography } from '@mui/joy';
 import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
@@ -12,7 +12,7 @@ import { useFolderStore, DFolder } from '~/common/stores/folders/store-chat-fold
 import { themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import { useProjectFilesStore } from './store-project-files';
-import { flushDisk } from './disk-storage';
+import { flushDisk, localJSON } from './disk-storage';
 import { selectNativeFolder } from './native-folder-selection';
 import { connectedFolderSchema, ConnectedFolder } from './folder-tools';
 import { ProjectFile } from './project-context';
@@ -130,6 +130,7 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
   const [title, setTitle] = React.useState(project.title);
   const [instructions, setInstructions] = React.useState(project.instructions);
   const [folders, setFolders] = React.useState<ConnectedFolder[]>(project.connectedFolders || []);
+  const [agentFolders, setAgentFolders] = React.useState<Record<string, ('codex' | 'claude')[]>>({});
   const [fileIds, setFileIds] = React.useState(project.fileIds);
   const originalFileIds = React.useRef(project.fileIds);
   const [loading, setLoading] = React.useState(false);
@@ -141,6 +142,16 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
     active.current = true;
     return () => { active.current = false; pickerRequest.current?.abort(); };
   }, []);
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    for (const folder of folders) {
+      void localJSON('folders', { method: 'POST', signal: controller.signal, body: JSON.stringify({ action: 'inspect', path: folder.path }) })
+        .then(result => { if (!controller.signal.aborted) setAgentFolders(current => ({ ...current, [folder.id]: result.agentFolders })); })
+        .catch(error => { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Could not inspect agent folders.'); });
+    }
+    return () => controller.abort();
+  }, [folders]);
 
   const addFolder = async () => {
     if (picking.current) return;
@@ -194,12 +205,16 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
         <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 'lg', overflow: 'hidden' }}>
           {folders.map(folder => <Box key={folder.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
             <FolderOutlinedIcon sx={{ color: 'text.tertiary', flexShrink: 0 }} />
-            <Box sx={{ flex: 1, minWidth: 0 }}><Typography level='body-sm' sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{folder.name}</Typography><Typography level='body-xs' sx={{ mt: 0.25, fontFamily: 'code', color: 'text.tertiary', overflowWrap: 'anywhere' }}>{folder.path}</Typography></Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}><Typography level='body-sm' sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{folder.name}</Typography><Typography level='body-xs' sx={{ mt: 0.25, fontFamily: 'code', color: 'text.tertiary', overflowWrap: 'anywhere' }}>{folder.path}</Typography>
+              {!!agentFolders[folder.id]?.length && <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                {agentFolders[folder.id].map(origin => <Checkbox key={origin} size='sm' label={`Use .${origin}`} checked={folder.agentFolders?.[origin] === true} onChange={event => setFolders(current => current.map(item => item.id === folder.id ? { ...item, agentFolders: { codex: item.agentFolders?.codex === true, claude: item.agentFolders?.claude === true, [origin]: event.target.checked } } : item))} />)}
+              </Box>}
+            </Box>
             <IconButton size='sm' variant='plain' color='neutral' aria-label={`Disconnect ${folder.name}`} disabled={loading} onClick={() => setFolders(current => current.filter(item => item.id !== folder.id))}><CloseIcon sx={{ fontSize: 18 }} /></IconButton>
           </Box>)}
           <Button size='sm' variant='plain' color='neutral' loading={loading} disabled={loading} startDecorator={<AddIcon />} onClick={() => void addFolder()} sx={{ width: '100%', minHeight: 48, justifyContent: 'flex-start', borderRadius: 0, p: 1.5, bgcolor: 'rgba(180, 198, 209, .06)' }}>Add folder</Button>
         </Box>
-        <Typography level='body-xs' sx={{ color: 'text.secondary' }}>Files stay on your Mac and are read on demand. Save adds these folders to the project’s file tools. Every chat also has ~/.claude, ~/.codex and local commands with the app’s permissions. Disconnecting removes this file connection.</Typography>
+        <Typography level='body-xs' sx={{ color: 'text.secondary' }}>Files stay on your Mac and are read on demand. Save adds these folders to the project’s file tools. Enable detected .codex or .claude folders to use their project instructions and skills. Every chat also has ~/.claude, ~/.codex and local commands with the app’s permissions. Disconnecting removes this file connection.</Typography>
       </Box>
       <Box component='details' sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 'md', p: 1.5 }}>
         <Box component='summary' sx={{ cursor: 'pointer', fontSize: 'sm', fontWeight: 600 }}>Shared instructions</Box>

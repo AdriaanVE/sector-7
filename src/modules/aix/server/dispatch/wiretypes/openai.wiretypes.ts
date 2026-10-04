@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { compactionItemSchema } from '~/common/personal/compaction';
 
 
 //
@@ -1375,6 +1376,7 @@ export namespace OpenAIWire_Responses_Items {
    *
    */
   export const OutputItem_schema = z.union([
+    compactionItemSchema,
     // Text output
     OutputContentItem_schema, // assistant/tool message/refusal
     OutputReasoningItem_schema,
@@ -1697,6 +1699,8 @@ export namespace OpenAIWire_API_Responses {
     // State management (we won't use this for stateless)
     store: z.boolean().nullish(), // defaults to true(!)
     previous_response_id: z.string().nullish(),
+
+    context_management: z.array(z.object({ type: z.literal('compaction'), compact_threshold: z.int().positive() })).optional(),
 
     // API options
     stream: z.boolean().nullish(),

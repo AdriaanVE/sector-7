@@ -24,6 +24,15 @@ export async function validateFolderPath(path: string): Promise<ConnectedFolder>
   if (!(await lstat(root)).isDirectory() || root === sep) throw new WorkspaceError('Choose a directory other than the filesystem root.', 400);
   return connectedFolderSchema.parse({ id: crypto.randomUUID(), name: basename(root), path: root });
 }
+export async function inspectAgentFolders(path: string) {
+  const folder = await validateFolderPath(path);
+  const agentFolders: ('codex' | 'claude')[] = [];
+  for (const origin of ['codex', 'claude'] as const) {
+    try { if ((await lstat(await checkedFolderPath(folder, `.${origin}`))).isDirectory()) agentFolders.push(origin); }
+    catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+  }
+  return { agentFolders };
+}
 export async function authorizeFolder(projectId: string | undefined, conversationId: string, folderId: string, directory = dataDirectory(), homeDirectory = homedir()) {
   const { workspace } = await loadWorkspace(directory);
   return resolveLocalFolder(folderFromWorkspace(workspace, projectId, conversationId, folderId, homeDirectory));

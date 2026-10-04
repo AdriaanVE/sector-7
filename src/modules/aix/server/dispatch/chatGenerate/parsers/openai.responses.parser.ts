@@ -353,7 +353,7 @@ class ResponseParserStateMachine {
  *   and the rs_... id are vendor-server-private (different keys, different state). Mixing them produces
  *   "Item with id rs_... not found" or worse silent corruption.
  */
-export function createOpenAIResponsesEventParser(rspVendor: AixWire_Vendors.RspVendor): ChatGenerateParseFunction {
+export function createOpenAIResponsesEventParser(rspVendor: AixWire_Vendors.RspVendor, deployment?: string, requestedModel?: string): ChatGenerateParseFunction {
 
   const R = new ResponseParserStateMachine();
 
@@ -432,6 +432,8 @@ export function createOpenAIResponsesEventParser(rspVendor: AixWire_Vendors.RspV
       case 'response.completed':
         // CHANGE of { ..fields.. } expected
         R.setResponse(eventType, event.response, ['status', 'output', 'usage', 'service_tier', 'tool_usage' /*, 'completed_at' (not parsed) */]); // service_tier settles ('auto' -> served tier) and tool_usage fills in along the way
+
+        if (rspVendor === 'openai' && deployment) emitCompaction(pt, event.response, deployment, requestedModel ?? event.response.model);
 
         // -> Status: determine stop reason based on streamed content
         pt.setTokenStopReason(R.hasFunctionCalls ? 'ok-tool_invocations' : 'ok');
@@ -520,6 +522,8 @@ export function createOpenAIResponsesEventParser(rspVendor: AixWire_Vendors.RspV
         const doneItem = event.item;
         const doneItemType = doneItem.type;
         switch (doneItemType) {
+          case 'compaction':
+            break;
           case 'message':
             // already parsed incrementally
             break;
@@ -915,7 +919,7 @@ export function createOpenAIResponsesEventParser(rspVendor: AixWire_Vendors.RspV
  * @param rspVendor the Responses vendor (AixWire_Vendors.RSP_VENDORS) - see createOpenAIResponsesEventParser for the rationale on
  *   why each vendor gets its own _vnd namespace (different encryption keys + private item ids).
  */
-export function createOpenAIResponseParserNS(rspVendor: AixWire_Vendors.RspVendor): ChatGenerateParseFunction {
+export function createOpenAIResponseParserNS(rspVendor: AixWire_Vendors.RspVendor, deployment?: string, requestedModel?: string): ChatGenerateParseFunction {
 
   const parserCreationTimestamp = Date.now();
 
@@ -936,6 +940,8 @@ export function createOpenAIResponseParserNS(rspVendor: AixWire_Vendors.RspVendo
 
     // full response parsing
     const response = OpenAIWire_API_Responses.Response_schema.parse(responseData);
+
+    if (rspVendor === 'openai' && deployment && response.status === 'completed') emitCompaction(pt, response, deployment, requestedModel ?? response.model);
 
     // -> Model
     if (response.model)
@@ -1036,6 +1042,8 @@ export function createOpenAIResponseParserNS(rspVendor: AixWire_Vendors.RspVendo
 
       const oItemType = oItem.type;
       switch (oItemType) {
+        case 'compaction':
+          break;
 
         // Reasoning contains all the reasoning summaries (if present)
         case 'reasoning':
@@ -1590,4 +1598,11 @@ function _warnIfObjectPropertiesDiffer(
   }
 
   return hasKeys(diff) ? diff : null;
+}
+
+function emitCompaction(pt: IParticleTransmitter, response: OpenAIWire_API_Responses.Response, deployment: string, model: string) {
+  const index = response.output.map(item => item.type).lastIndexOf('compaction');
+  if (index >= 0) pt.sendSetVendorState({ p: 'svs', vendor: 'openai-compaction', state: {
+    model, deployment, items: response.output.slice(index),
+  } });
 }

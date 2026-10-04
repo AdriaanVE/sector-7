@@ -1,4 +1,5 @@
 import * as z from 'zod/v4';
+import { SECTOR7_OPENAI_CONTEXT } from '~/common/personal/runtime-config';
 
 import type { OpenAIDialects } from '~/modules/llms/server/openai/openai.access';
 
@@ -148,6 +149,8 @@ export function aixToOpenAIResponses(
     /** Default for resumability is true, however we set it to false unless explicitly requested. */
     store: enableResumability ?? false, // enable storage for resumability if requested
     // previous_response_id: undefined,
+
+    ...(openAIDialect === 'openai' && model.id === 'gpt-6.1-sol' && SECTOR7_OPENAI_CONTEXT.experimentalCompaction ? { context_management: [{ type: 'compaction', compact_threshold: SECTOR7_OPENAI_CONTEXT.compactThreshold }] } : {}),
 
     // API options
     stream: streaming,
@@ -395,7 +398,7 @@ function _toOpenAIResponsesRequestInput(systemMessage: AixMessages_SystemMessage
 
 
   // We decide to adopt these schemas for the conversion (API gives us a few choices)
-  const chatMessages: (UserMessage | ModelMessage | FunctionCallMessage | FunctionCallOutputMessage | ReasoningMessage | CodeInterpreterCallMessage)[] = [];
+  const chatMessages: TRequestInput[] = [];
   type UserMessage = Omit<OpenAIWire_Responses_Items.UserItemMessage, 'role'> & { role: 'user' };
   type ModelMessage = Extract<OpenAIWire_Responses_Items.InputMessage_Compat, { role: 'assistant' }>;
   type FunctionCallMessage = OpenAIWire_Responses_Items.OutputFunctionCallItem;
@@ -580,6 +583,10 @@ function _toOpenAIResponsesRequestInput(systemMessage: AixMessages_SystemMessage
         break;
 
       case 'model':
+        if (vndNamespace === 'openai' && aixMessage.compaction) {
+          chatMessages.push(...aixMessage.compaction.items.map(item => OpenAIWire_Responses_Items.InputItem_schema.parse(item)));
+          allowUserAppend = false;
+        }
         for (const modelPart of messageParts) {
           const mPt = modelPart.pt;
           switch (mPt) {

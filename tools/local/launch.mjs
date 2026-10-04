@@ -12,8 +12,11 @@ if (!key && process.platform === 'darwin') {
 if (!key) throw new Error('Set BIFROST_API_KEY or configure the Bifrost password to Keychain.');
 const base = process.env.BIFROST_ANTHROPIC_BASE_URL || 'https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/anthropic';
 const gateway = new URL(base);
-if (!['http:', 'https:'].includes(gateway.protocol) || gateway.username || gateway.password) throw new Error('BIFROST_URL must be an HTTP(S) URL without credentials.');
-const env = { ...process.env, ...(folderPicker ? { SECTOR7_FOLDER_PICKER: folderPicker } : {}), ANTHROPIC_API_KEY: key, ANTHROPIC_API_HOST: base.replace(/\/$/, '') };
+if (!['http:', 'https:'].includes(gateway.protocol) || gateway.username || gateway.password) throw new Error('BIFROST_ANTHROPIC_BASE_URL must be an HTTP(S) URL without credentials.');
+const openaiBase = process.env.BIFROST_OPENAI_BASE_URL || 'https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/openai';
+const openaiGateway = new URL(openaiBase);
+if (!['http:', 'https:'].includes(openaiGateway.protocol) || openaiGateway.username || openaiGateway.password) throw new Error('BIFROST_OPENAI_BASE_URL must be an HTTP(S) URL without credentials.');
+const env = { ...process.env, ...(folderPicker ? { SECTOR7_FOLDER_PICKER: folderPicker } : {}), ANTHROPIC_API_KEY: key, ANTHROPIC_API_HOST: base.replace(/\/$/, ''), OPENAI_API_KEY: key, OPENAI_API_HOST: openaiBase.replace(/\/$/, ''), OPENAI_API_ORG_ID: '' };
 const args = ['node_modules/next/dist/bin/next', mode, '-H', '127.0.0.1', '-p', process.env.PORT || '3000'];
 const command = process.platform === 'darwin' ? 'caffeinate' : process.execPath;
 const child = spawn(command, process.platform === 'darwin' ? ['-i', process.execPath, ...args] : args, { stdio: 'inherit', env });

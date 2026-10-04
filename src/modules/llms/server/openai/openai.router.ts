@@ -1,6 +1,7 @@
 import * as z from 'zod/v4';
 import { TRPCError } from '@trpc/server';
 
+import { env } from '~/server/env.server';
 import { createTRPCRouter, edgeProcedure } from '~/server/trpc/trpc.server';
 import { fetchJsonOrTRPCThrow, fetchResponseOrTRPCThrow, fetchTextOrTRPCThrow, TRPCFetcherError } from '~/server/trpc/trpc.router.fetchers';
 import { serverCapitalizeFirstLetter } from '~/server/wire';
@@ -131,6 +132,8 @@ export const llmOpenAIRouter = createTRPCRouter({
     })
 
     .query(async ({ input: { access }, signal }): Promise<{ models: ModelDescriptionSchema[] }> => {
+      if (env.ANTHROPIC_API_KEY && access.dialect !== 'openai')
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'This provider is not configured for the local workspace.' });
 
       const models = await listModelsRunDispatch(access, signal);
 

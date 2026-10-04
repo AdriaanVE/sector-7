@@ -108,7 +108,7 @@ export const publicProcedure = t.procedure;
  * authentication will be required.
  */
 export const edgeProcedure = t.procedure.use(({ path, next }) => {
-  if (env.ANTHROPIC_API_KEY && /^(llmBedrock|llmGemini|llmOllama|llmOpenAI|speex|googleSearch)\./.test(path))
+  if (env.ANTHROPIC_API_KEY && path !== 'llmOpenAI.listModels' && /^(llmBedrock|llmGemini|llmOllama|llmOpenAI|speex|googleSearch)\./.test(path))
     throw new TRPCError({ code: 'FORBIDDEN', message: 'This provider is not configured for the local Claude workspace.' });
   if (/^aix\.upstream(Reattach|Delete)/.test(path))
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'Disconnected runs cannot be resumed. Retry the message.' });

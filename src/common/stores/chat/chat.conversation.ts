@@ -15,6 +15,7 @@ export interface DConversation extends Attention {
 
   chatConfig: ChatConfig;
   freshContainer?: boolean;
+  subagent?: { parentConversationId: DConversationId; invocationId: string };
 
   messages: DMessage[];               // linear list of messages in this conversation
 
