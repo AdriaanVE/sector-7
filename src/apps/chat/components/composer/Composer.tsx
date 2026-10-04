@@ -17,7 +17,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { ColorPaletteProp, SxProps, VariantProp } from '@mui/joy/styles/types';
 import { Box, Button, Card, IconButton, Textarea, Typography } from '@mui/joy';
 import SendIcon from '@mui/icons-material/Send';
-import StopOutlinedIcon from '@mui/icons-material/StopOutlined';
+import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 
 import type { AppChatIntent } from '../../AppChat';
@@ -100,6 +100,27 @@ const paddingBoxSx: SxProps = {
 const minimizedSx: SxProps = {
   ...paddingBoxSx,
   display: 'none',
+};
+
+const stopButtonSx: SxProps = {
+  borderRadius: '50%',
+  '--IconButton-size': { xs: '40px', sm: '36px' },
+  '--Icon-color': 'currentColor',
+  backgroundColor: '#A855F7',
+  color: '#060F14',
+  '&:not(:disabled):not([aria-disabled="true"]):hover, &:not(:disabled):focus-visible': {
+    backgroundColor: '#bc7bff',
+    boxShadow: '0 0 12px rgba(168, 85, 247, .4)',
+  },
+  '&:not(:disabled):active': { backgroundColor: '#A855F7' },
+  '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+  '@media (forced-colors: active)': {
+    backgroundColor: 'ButtonFace',
+    color: 'ButtonText',
+    '&:not(:disabled):not([aria-disabled="true"]):hover, &:not(:disabled):focus-visible': {
+      backgroundColor: 'ButtonFace', boxShadow: 'none',
+    },
+  },
 };
 
 
@@ -917,7 +938,7 @@ export function Composer(props: {
                 '&:not(:disabled):not([aria-disabled="true"]):hover, &:not(:disabled):not([aria-disabled="true"]):focus-visible': { boxShadow: '0 0 12px rgba(0,255,179,.45)' },
                 '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
               }} disabled={noConversation || sendStarted || chatRunActive} onClick={handleSendClicked}>{sendButtonIcon}</IconButton>
-              : <IconButton aria-label='Stop response' variant='soft' color='danger' disabled={noConversation} onClick={handleStopClicked}><StopOutlinedIcon /></IconButton>}
+              : <IconButton aria-label='Stop response' variant='solid' color='neutral' sx={stopButtonSx} disabled={noConversation} onClick={handleStopClicked}><StopRoundedIcon sx={{ fontSize: 22 }} /></IconButton>}
           </Box>
 
           {!isDraw && props.chatLLM && <ComposerStatusLine direct={tokensComposer} responseMax={tokensResponseMax} limit={tokenLimit}
