@@ -9,7 +9,7 @@ import { WorkspaceError } from '~/server/local/workspace';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-const identity = { projectId: z.string().min(1), conversationId: z.string().min(1), folderId: z.string().min(1), invocationId: z.string().min(1).max(128) };
+const identity = { projectId: z.string().min(1).optional(), conversationId: z.string().min(1), folderId: z.string().min(1), invocationId: z.string().min(1).max(128) };
 const command = { ...identity, command: z.string().min(1).max(32 * 1024), timeoutMs: z.number().int().min(1).max(300_000).optional() };
 const requestSchema = z.discriminatedUnion('action', [
   z.object({ ...command, action: z.literal('start') }),

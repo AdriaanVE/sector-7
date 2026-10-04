@@ -8,7 +8,6 @@ import { useChatStore } from '~/common/stores/chat/store-chats';
 import { useModelsStore } from '~/common/stores/llms/store-llms';
 import { useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { assembleRequest } from './assemble-request';
-import { localTools } from './local-tool-dispatch';
 import { nativeHistoryProjection } from './native-history';
 import { usePersonalSettings } from './store-personal-settings';
 import { useProjectFilesStore } from './store-project-files';
@@ -75,7 +74,7 @@ for (const modelId of ['claude-opus-5-5', 'claude-sonnet-5-5'] as const) test(`$
 
   const original = structuredClone(chat.messages);
   const assembled = assembleRequest(chat.id, modelId, chat.messages);
-  const request = { systemMessage: await aixCGR_SystemMessage_FromDMessageOrThrow(assembled.system), chatSequence: await aixCGR_ChatSequence_FromDMessagesOrThrow(assembled.messages), tools: localTools, toolsPolicy: { type: 'auto' as const } };
+  const request = { systemMessage: await aixCGR_SystemMessage_FromDMessageOrThrow(assembled.system), chatSequence: await aixCGR_ChatSequence_FromDMessagesOrThrow(assembled.messages), tools: assembled.tools, toolsPolicy: { type: 'auto' as const } };
   const model = aixCreateModelFromLLMOptions([LLM_IF_OAI_Reasoning, LLM_IF_HOTFIX_NoTemperature], chatParameters(chat.chatConfig), undefined, modelId);
   const wire = aixToAnthropicMessageCreate('anthropic', model, request, true, { ...aixAnthropicHostedFeatures(model, request), nativeDeployment: 'wire-test' });
   const blocks = wire.messages.flatMap(message => message.content);
@@ -118,4 +117,27 @@ test('assistant messages without eligible native history omit the wire property'
   const messages = await aixCGR_ChatSequence_FromDMessagesOrThrow([legacy, edited]);
   assert.equal(messages.length, 2);
   for (const message of messages) assert.equal(Object.hasOwn(message, 'nativeHistory'), false);
+});
+
+test('a chat outside projects exposes default skill folders and terminal tools on the Anthropic wire', async t => {
+  const saved = { chats: useChatStore.getState(), folders: useFolderStore.getState(), models: useModelsStore.getState() };
+  pauseDiskWrites(true);
+  t.after(() => {
+    useChatStore.setState(saved.chats); useFolderStore.setState(saved.folders); useModelsStore.setState(saved.models);
+    pauseDiskWrites(false);
+  });
+  const chat = createDConversation();
+  useChatStore.setState({ conversations: [chat] });
+  useFolderStore.setState({ folders: [] });
+  useModelsStore.setState({ llms: [{ id: 'claude-opus-5-5', label: 'Opus', created: 0, description: '', hidden: false, contextTokens: 100000, maxOutputTokens: 8192, interfaces: [], parameterSpecs: [], initialParameters: {}, sId: 'test', vId: 'anthropic' }] });
+  const assembled = assembleRequest(chat.id, 'claude-opus-5-5', [createDMessageTextContent('user', 'Install a skill for Claude and Codex')]);
+  const request = { systemMessage: await aixCGR_SystemMessage_FromDMessageOrThrow(assembled.system), chatSequence: await aixCGR_ChatSequence_FromDMessagesOrThrow(assembled.messages), tools: assembled.tools, toolsPolicy: { type: 'auto' as const } };
+  const model = modelFor();
+  const wire = aixToAnthropicMessageCreate('anthropic', model, request, true, aixAnthropicHostedFeatures(model, request));
+  const systemText = wire.system?.map(block => block.text).join('\n') || '';
+  assert.match(systemText, /"id":"local-claude","name":"~\/\.claude"/);
+  assert.match(systemText, /"id":"local-codex","name":"~\/\.codex"/);
+  assert.ok(wire.tools?.some(tool => tool.name === 'local_command'));
+  assert.ok(wire.tools?.some(tool => tool.name === 'folder_read'));
+  assert.equal(assembled.context, undefined);
 });
