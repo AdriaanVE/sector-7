@@ -11,8 +11,8 @@
 // lists + import smoke) is asserted; the rest is reported as skipped.
 //
 // Run:
-// - `npm test` (skips key-less vendors; export vendor keys to widen coverage)
-// - `NODE_ENV=development npx tsx --test src/modules/llms/server/listModels.test.ts`
+// - `npm test` (offline even when vendor credentials are exported)
+// - `npm run test:network` (explicit opt-in; missing credentials still skip)
 //
 // -----------------------------------------------------------------------------
 // Credential env vars per protocol/dialect
@@ -87,6 +87,7 @@ const hasKey = (...vars: string[]): boolean => vars.some(v => !!E[v]?.trim());
 
 // Gate label for conditionally-run tests: returns a skip reason string (or false to run).
 const skipIfMissing = (envVar: string | string[]): string | false => {
+  if (E.SECTOR7_TEST_NETWORK !== '1') return 'network tests are opt-in: npm run test:network';
   const vars = Array.isArray(envVar) ? envVar : [envVar];
   return hasKey(...vars) ? false : `needs ${vars.join(' or ')}`;
 };
@@ -391,11 +392,10 @@ describe('listModels enumeration', () => {
   });
 
   test('openai-compat/zai: curated list (API is optional + unreliable)', async () => {
-    // Always runs: even if the upstream list API fails (or keyless: is never tried),
-    // zaiCuratedModelDescriptions() is returned. With ZAI_API_KEY set, also exercises
-    // the optimistic live-discovery merge path.
+    // The required lane never attempts optional live discovery, even with a key.
+    // test:network also exercises discovery when ZAI_API_KEY is available.
     const models = await expectOk(
-      { dialect: 'zai', ...openAIShape({ oaiKey: E.ZAI_API_KEY || '' }) } as AixAPI_Access,
+      { dialect: 'zai', ...openAIShape({ oaiKey: E.SECTOR7_TEST_NETWORK === '1' ? E.ZAI_API_KEY || '' : '' }) } as AixAPI_Access,
       1, 'zai',
     );
     ok(models.length > 0, 'zai: curated list non-empty');
