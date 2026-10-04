@@ -25,6 +25,7 @@ export default defineConfig([{
       "public/**",                      // served verbatim, outside the bundler + type program
       ".claude/**",                     // agent tooling, own runtime
       ".worktrees/**", ".ship/**",       // separate checkouts and local review artifacts
+      "desktop/**",
       "electron/**",                    // excluded from the type program (root tsconfig)
       "tools/video/**",                 // self-contained package, own toolchain
     ],

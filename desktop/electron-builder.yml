@@ -1,0 +1,32 @@
+appId: com.adriaanve.sector7
+productName: Sector 7
+asar: true
+npmRebuild: false
+afterPack: scripts/after-pack.cjs
+directories:
+  output: out
+  buildResources: assets
+files:
+  - main/**
+  - '!main/*.test.mjs'
+  - loading.html
+  - package.json
+extraResources:
+  - from: ../LICENSE
+    to: LICENSE
+mac:
+  target:
+    - dir
+    - dmg
+  icon: assets/icon.png
+  identity: '-'
+  hardenedRuntime: false
+  category: public.app-category.productivity
+  extendInfo:
+    NSMicrophoneUsageDescription: Sector 7 uses your microphone when you start voice input.
+    NSDesktopFolderUsageDescription: Sector 7 accesses folders you connect to a project.
+    NSDocumentsFolderUsageDescription: Sector 7 accesses folders you connect to a project.
+    NSDownloadsFolderUsageDescription: Sector 7 saves exports and reads attachments you select.
+    NSAppleEventsUsageDescription: Sector 7 opens the folder chooser when you connect a project folder.
+artifactName: 'Sector-7-${version}-${arch}.${ext}'
+publish: null

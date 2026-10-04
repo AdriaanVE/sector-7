@@ -17,3 +17,7 @@ Use macOS Keychain Access to store the existing gateway key, or inject it throug
 Leave analytics settings `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_GA4_MEASUREMENT_ID` unset for the personal local app. No login, Google SSO or cloud sync is required. Browser dictation remains Chrome Web Speech, which sends audio to Google. Dedicated voice and image model connections are deferred.
 
 One server and one browser profile are recommended during this preview. Cross-process workspace locking and clearer stale-profile recovery remain acceptance work. Back up from Settings before changing data directories or testing migration. Keep the legacy directory after the Sector 7 rename to retain existing chats.
+
+## Electron desktop
+
+The Mac app reads `~/Library/Application Support/Sector 7/config.json` and uses the same Bifrost Keychain defaults and durable `AI GUI` data directory. Default loopback port is 47100; `SECTOR7_DESKTOP_PORT` overrides it. Install output defaults to `desktop/local`. See [Mac app setup](electron-mac.md) for the complete config, packaging and lifecycle details.

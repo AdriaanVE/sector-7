@@ -232,7 +232,7 @@ function commandReceipt(request: z.output<typeof commandRequestSchema>): Receipt
 function commandEnvironment() {
   const env = { ...process.env };
   // Server-injected inference credentials belong to the app, not command subprocesses.
-  for (const key of ['BIFROST_API_KEY', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY']) delete env[key];
+  for (const key of ['BIFROST_API_KEY', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'SECTOR7_DESKTOP_TOKEN', 'ELECTRON_RUN_AS_NODE']) delete env[key];
   return env;
 }
 

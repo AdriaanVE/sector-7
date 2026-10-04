@@ -47,6 +47,7 @@
   ],
   "exclude": [
     "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx",
+    "desktop",
     "electron",
     "tools",
     "dist",

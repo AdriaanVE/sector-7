@@ -1,3 +1,4 @@
+import { installDesktopLifecycle } from '~/common/personal/desktop-lifecycle';
 import { useChatRuns } from '~/common/personal/chat-run';
 import { useQuestionOperations } from '~/common/personal/questions';
 import { RecoveryRestore } from '~/common/personal/ProviderRecoveryControls';
@@ -53,6 +54,7 @@ export function ProviderDiskWorkspace({ children }: { children: React.ReactNode 
     void loading.then(() => setState('ready')).catch(error => { setError(error.message); setState('recovery'); });
   }, []);
   React.useEffect(boot, [boot]);
+  React.useEffect(() => state === 'ready' ? installDesktopLifecycle() : undefined, [state]);
   if (state !== 'ready') return <Box sx={{ height: '100dvh', display: 'grid', placeContent: 'center', p: 3, gap: 2 }}>
     <Typography level='h3'>{state === 'loading' ? 'Loading your workspace' : 'Recovery required'}</Typography>
     {state === 'recovery' && <><Alert color='danger'>{error}</Alert><Button onClick={boot}>Retry loading</Button>
