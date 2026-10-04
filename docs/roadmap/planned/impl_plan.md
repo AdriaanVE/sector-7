@@ -4,7 +4,7 @@ Status: In progress
 Approval: Implementation authorized 2026-10-03; all three product calls resolved (see Human calls)
 Date: 2026-10-03; reconciled 2026-10-04
 Repository: /Users/adriaan.van.erps/Code/sector-7, main
-Current source: fb8e0be019ac38d414f4a42d59967c42d5d11e35; current follow-up evidence below
+Current source: bbf67e308b3c6582fa974a71d5b09eb2237a53b4; current follow-up evidence below
 Original analyzed base: 80d366a88cc8aa885a2d62ca9c60100eb72af40e, big-AGI Open 2.1.1
 Supersedes: [neon-tokyo-chat.md](neon-tokyo-chat.md) (revised plan) as the implementation reference
 Inputs: [review](neon-tokyo-chat-review.md), [review analysis](../../analysis/neon-tokyo-chat-review-analysis.md),
@@ -570,10 +570,10 @@ in [sector-7-later.md](sector-7-later.md), outside current implementation accept
 
 ## Current evidence and remaining acceptance
 
-Current published source is main `fb8e0be`. The [change records](../../change_details/) report
+Current published source is main `bbf67e3`. The tracked [remaining acceptance matrix](../analysis/sector-7-remaining-acceptance.md) distinguishes source, protocol and browser evidence. The [change records](../../change_details/) report
 reviewed startup/storage, original-file ownership, live question controls, completed summaries
-and reply-end/navigator fixes. The startup milestone passed 171 tests with 22 credential-dependent
-skips, root/tooling types, source lint and production build. These are bounded evidence, not full
+and reply-end/navigator fixes. The latest command-start recovery milestone passed 193 tests with 22 credential-dependent
+skips, root/tooling types, source lint and production build; independent source and test reviews approved it. These are bounded evidence, not full
 milestone acceptance. The older `.ship` audit is historical.
 
 Actual restart checks preserved 12 chats, 2 projects and both exact owned asset hashes; live ZIP
@@ -591,7 +591,7 @@ actual app route, including production reassembly and client conversion. Success
 fetch summaries, fragments and native content survived real disk/ZIP restore and exact replay.
 This strengthens protocol/storage evidence, not full browser tool lifecycle acceptance.
 
-M2/M3/M4/M5 remain open. Required evidence includes clean/stale multiple-profile and migration/UI
+M1 final browser smoke checks and M2/M3/M4/M5 acceptance remain open. Required evidence includes retained-feature/credential checks, per-chat and in-flight settings, project/skill interactions, live pause_turn evidence, clean/stale multiple-profile and migration/UI
 backup recovery; question Stop/reload/import and mixed local-tool paths; native chooser selection,
 cancellation and durable reconnect; actual React command Stop/reload/restart without duplicate
 mutation; dense/streaming/compact/touch/Cleanup navigation and stored unread geometry. Generated
