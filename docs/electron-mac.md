@@ -1,6 +1,6 @@
 # Sector 7 Mac app
 
-Sector 7 Desktop 0.1.0 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
+Sector 7 Desktop 0.1.1 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
 
 ## Build and install
 
@@ -18,7 +18,7 @@ open "desktop/local/Sector 7.app"
 Build output:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.0-arm64.dmg`
+- `desktop/out/Sector-7-0.1.1-arm64.dmg`
 
 After this workflow reaches `main`, open GitHub Actions > Build Mac app > Run workflow and choose `main`. The separate manual workflow runs the quality gate and desktop checks, builds the Apple silicon app/DMG, and uploads them for 14 days. The app is zipped with `ditto` to preserve its bundle permissions. It uses the same ad-hoc signing as local builds. Other branches are skipped. Hosted execution must be verified after the workflow is available on `main`.
 
@@ -72,6 +72,8 @@ Port 47100 binds only to 127.0.0.1. The port stays fixed because browser caches 
 Help opens the configuration, data and log folders. Logs live in `~/Library/Logs/Sector 7` and rotate after 5 MB. Backend logs redact the current gateway key and launch token. As in the browser app, local tool output may contain personal project content; treat logs and backups as private.
 
 ## Behavior
+
+The backend runs through Electron's background helper. Only Sector 7 appears in the Dock and app switcher; the helper stays alive until the app quits.
 
 Closing the window stops active chat work, waits for it to settle, and flushes pending workspace saves before closing. A failed save keeps the window open unless you explicitly choose Close without saving. On macOS, the app remains in the Dock and reopens its window when activated. Cmd+Q performs the same save step and then shuts down the backend; terminal process groups are cleaned up by the existing command manager. A pipe watchdog shuts down the backend if its Electron parent dies. An OS crash can still interrupt writes and leave detached descendants; existing receipt/recovery handling applies.
 
