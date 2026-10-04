@@ -47,6 +47,7 @@ let nextConfig: NextConfig = {
   // [exports] https://nextjs.org/docs/advanced-features/static-html-export
   ...(buildType && {
     output: buildType,
+    ...(buildType === 'standalone' && { outputFileTracingRoot: fileURLToPath(new URL('.', import.meta.url)) }),
     distDir: 'dist',
 
     // disable image optimization for exports

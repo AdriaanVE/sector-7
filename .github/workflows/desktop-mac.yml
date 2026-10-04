@@ -1,0 +1,138 @@
+name: Build Mac app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-mac-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Check release prerequisites
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Check publishing credential and version
+        env:
+          GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
+        run: |
+          if test -z "$GH_TOKEN"; then
+            echo 'Set SECTOR7_RELEASE_TOKEN in the main-only release environment with Contents and Pull requests write permissions.' >&2
+            exit 1
+          fi
+          gh api user --silent
+          version=$(node -p "require('./desktop/package.json').version")
+          if gh release view "desktop-v${version}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'This desktop version already has a release. Bump the desktop package version, or remove an unpublished failed draft before retrying.' >&2
+            exit 1
+          fi
+
+  build:
+    name: Apple silicon app and DMG
+    needs: preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+
+      - name: Install web and desktop dependencies
+        run: |
+          npm ci
+          npm run desktop:setup
+
+      - name: Check web and desktop code
+        run: |
+          npm run precommit
+          npm run desktop:check
+
+      - name: Build app and DMG
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run desktop:build
+
+      - name: Archive app with bundle permissions preserved
+        run: ditto -c -k --sequesterRsrc --keepParent 'desktop/out/mac-arm64/Sector 7.app' desktop/out/Sector-7-arm64.app.zip
+
+      - name: Upload downloadable app and DMG
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Sector-7-mac-arm64-${{ github.sha }}
+          path: |
+            desktop/out/Sector-7-arm64.app.zip
+            desktop/out/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish release and Homebrew update
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Sector-7-mac-arm64-${{ github.sha }}
+          path: desktop/out
+
+      - name: Prepare cask checksum
+        run: node desktop/scripts/homebrew-cask.mjs desktop/out/Sector-7-arm64.app.zip
+
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
+        run: |
+          gh api user --silent
+          version=$(node -p "require('./desktop/package.json').version")
+          tag="desktop-v${version}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'This desktop version is already published. Bump desktop/package.json before publishing again.' >&2
+            exit 1
+          fi
+          gh release create "$tag" desktop/out/Sector-7-arm64.app.zip desktop/out/*.dmg \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Sector 7 Desktop $version" \
+            --notes-file docs/homebrew-release-notes.md --latest=false
+
+      - name: Open cask update PR
+        env:
+          GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
+        run: |
+          version=$(node -p "require('./desktop/package.json').version")
+          branch="chore/homebrew-${version}-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add -- Casks/sector-7.rb
+          git commit -m "Desktop: update Homebrew cask to $version"
+          gh auth setup-git
+          git push origin "$branch"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
+            --title "Desktop: update Homebrew cask to $version" --body-file docs/homebrew-pr-body.md

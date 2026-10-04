@@ -1,0 +1,23 @@
+{
+  "name": "sector-7-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sector 7 local Mac app",
+  "author": "AdriaanVE",
+  "license": "MIT",
+  "type": "module",
+  "main": "main/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test main/*.test.mjs"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.2.0",
+    "@types/node": "22.19.15",
+    "electron": "41.10.7",
+    "electron-builder": "26.15.3",
+    "fs-ext": "2.1.1",
+    "typescript": "6.0.3"
+  }
+}
