@@ -52,6 +52,7 @@ export async function startBackend(config, directory, logs) {
   const env = { NODE_ENV: 'production', ELECTRON_RUN_AS_NODE: '1', NEXT_TELEMETRY_DISABLED: '1',
     HOSTNAME: '127.0.0.1', PORT: String(config.port), SECTOR7_DESKTOP_TOKEN: token,
     ANTHROPIC_API_KEY: key, ANTHROPIC_API_HOST: config.bifrost.baseUrl, PATH: shellPath(),
+    OPENAI_API_KEY: key, OPENAI_API_HOST: config.bifrost.openaiBaseUrl,
     ...(config.dataDir ? { AI_GUI_DATA_DIR: config.dataDir } : {}) };
   for (const name of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG']) if (process.env[name]) env[name] = process.env[name];
   const log = logger(join(logs, 'server.log'), [key, token]);

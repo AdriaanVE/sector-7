@@ -2,7 +2,7 @@ import * as z from 'zod/v4';
 import type { AixTools_ToolDefinition } from '~/modules/aix/server/api/aix.wiretypes';
 import type { DMessage } from '~/common/stores/chat/chat.message';
 import { isContentFragment, isToolInvocationPart, isToolResponsePart } from '~/common/stores/chat/chat.fragments';
-export const connectedFolderSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), name: z.string().min(1).max(256), path: z.string().min(1).max(4096) });
+export const connectedFolderSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), name: z.string().min(1).max(256), path: z.string().min(1).max(4096), agentFolders: z.object({ codex: z.boolean(), claude: z.boolean() }).optional() });
 export type ConnectedFolder = z.infer<typeof connectedFolderSchema>;
 export const DEFAULT_LOCAL_FOLDERS = [{ id: 'local-claude', name: '~/.claude' }, { id: 'local-codex', name: '~/.codex' }] as const;
 export function localFoldersForProject(folders: readonly ConnectedFolder[] = []) {

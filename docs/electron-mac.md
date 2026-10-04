@@ -56,6 +56,7 @@ The first launch creates `~/Library/Application Support/Sector 7/config.json`. I
   "preventSleep": true,
   "bifrost": {
     "baseUrl": "https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/anthropic",
+    "openaiBaseUrl": "https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/openai",
     "keychainAccount": "adriaan.van.erps",
     "keychainService": "telenet-bifrost-dev-virtual-key"
   }
@@ -64,7 +65,7 @@ The first launch creates `~/Library/Application Support/Sector 7/config.json`. I
 
 Optional `dataDir` selects an absolute workspace directory. Without it, the app preserves S7's existing `~/Library/Application Support/AI GUI` directory, including chats, projects, assets, command receipts and edit recovery copies. Electron's disposable profile lives under `Sector 7`; it does not import another browser's caches. Use S7 Settings for validated ZIP backups and recovery. App installation never deletes workspace data.
 
-`BIFROST_API_KEY` overrides Keychain when launching from a shell. `BIFROST_ANTHROPIC_BASE_URL`, `BIFROST_KEYCHAIN_ACCOUNT`, `BIFROST_KEYCHAIN_SERVICE` and `AI_GUI_DATA_DIR` override their config equivalents. `SECTOR7_DESKTOP_PORT` overrides `port`; the generic `PORT` variable does not affect desktop launch. Finder-launched apps use config and Keychain. Do not add keys to config.json or environment files included in a build.
+`BIFROST_API_KEY` overrides Keychain when launching from a shell. `BIFROST_ANTHROPIC_BASE_URL`, `BIFROST_OPENAI_BASE_URL`, `BIFROST_KEYCHAIN_ACCOUNT`, `BIFROST_KEYCHAIN_SERVICE` and `AI_GUI_DATA_DIR` override their config equivalents. `SECTOR7_DESKTOP_PORT` overrides `port`; the generic `PORT` variable does not affect desktop launch. Finder-launched apps use config and Keychain. `bifrost.baseUrl` and `bifrost.openaiBaseUrl` configure Claude and Sol independently and use the same gateway key. Existing config files receive the default Sol endpoint when the new field is absent. Do not add keys to config.json or environment files included in a build.
 
 Port 47100 binds only to 127.0.0.1. The port stays fixed because browser caches use the origin. If it is occupied, startup reports a conflict and exits; change the port explicitly or close the conflicting app. The app never silently connects to another server or changes its browser origin. A per-launch token protects every HTTP request before Next receives it. Electron injects it into local requests; page scripts and model-run terminal commands do not receive the token.
 

@@ -336,27 +336,12 @@ export function openAIAccess(access: OpenAIAccessSchema, modelRefId: string | nu
       };
 
     case 'openai': {
+      if (access.oaiKey || access.oaiHost || access.oaiOrg || access.clientSideFetch)
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'This local app uses server-managed Bifrost credentials. Client keys, hosts and direct requests are disabled.' });
 
-      // Credential resolution: client-dominated
-      // - if the client provides a host, they own the whole request - no server
-      // - credentials (API key, org) are sent to client-chosen endpoints
-      // - if the client doesn't set a host, they can still override the key (own billing).
-      let oaiKey: string;
-      let oaiHost: string;
-      let oaiOrg: string;
-      if (access.oaiHost) {
-        // Client controls the endpoint: only client credentials
-        oaiHost = access.oaiHost;
-        oaiKey = access.oaiKey || ''; // key can be null, e.g. LocalAI
-        oaiOrg = access.oaiOrg || '';
-      } else {
-        // Client hasn't touched the endpoint: server infrastructure
-        oaiHost = /* NO access.oaiHost */ env.OPENAI_API_HOST || DEFAULT_OPENAI_HOST;
-        oaiKey = access.oaiKey || env.OPENAI_API_KEY || '';
-        oaiOrg = access.oaiOrg || env.OPENAI_API_ORG_ID || '';
-      }
-
-      oaiHost = llmsFixupHost(oaiHost, apiPath);
+      const oaiKey = env.OPENAI_API_KEY || '';
+      const oaiOrg = env.OPENAI_API_ORG_ID || '';
+      let oaiHost = llmsFixupHost(env.OPENAI_API_HOST || DEFAULT_OPENAI_HOST, apiPath);
 
       // Require a key when targeting the default OpenAI host
       if (!oaiKey && llmsHostnameMatches(oaiHost, DEFAULT_OPENAI_HOST))

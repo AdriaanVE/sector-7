@@ -407,7 +407,7 @@ export async function aixCGR_ChatSequence_FromDMessagesOrThrow(
     } else if (dMessageRole === 'assistant') {
 
       const nativeHistory = eligibleNativeHistory(m.generator?.nativeHistory, m.fragments);
-      const modelMessage: AixMessages_ModelMessage = { role: 'model', parts: [], ...(nativeHistory ? { nativeHistory } : {}) };
+      const modelMessage: AixMessages_ModelMessage = { role: 'model', parts: [], ...(nativeHistory ? { nativeHistory } : {}), ...(m.generator?.compaction ? { compaction: m.generator.compaction } : {}) };
 
       for (const aFragment of m.fragments) {
 
@@ -568,7 +568,7 @@ export async function aixCGR_ChatSequence_FromDMessagesOrThrow(
         }
       }
 
-      if (modelMessage.parts.length > 0) {
+      if (modelMessage.parts.length > 0 || modelMessage.compaction) {
 
         // (on Assistant messages) handle the ant-cache-prompt user/auto flags, on the very last message
         if (mHasAntCacheFlag)

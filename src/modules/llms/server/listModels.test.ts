@@ -60,6 +60,7 @@
 import { describe, test } from 'node:test';
 
 import type { AixAPI_Access } from '../../aix/server/api/aix.wiretypes';
+import { rejects } from 'node:assert/strict';
 import type { ModelDescriptionSchema } from './llm.server.types';
 
 import { listModelsRunDispatch } from './listModels.dispatch';
@@ -332,21 +333,17 @@ describe('listModels enumeration', () => {
     ok(!models.some(m => m.id.startsWith('zyphra/')), 'nvidia-host: retired catalog ids are dropped');
   });
 
-  test('openai-compat/openai: live listing', { skip: skipIfMissing('OPENAI_API_KEY') }, async () => {
+  test('openai-compat/openai: server-managed curated listing', { skip: skipIfMissing('OPENAI_API_KEY') }, async () => {
     await expectOk(
-      { dialect: 'openai', ...openAIShape({ oaiKey: E.OPENAI_API_KEY || '' }) } as AixAPI_Access,
+      { dialect: 'openai', ...openAIShape() } as AixAPI_Access,
       1, 'openai/live',
     );
   });
 
-  test('openai-compat/openai via minimax.io host: hardcoded list (no /v1/models API)', async () => {
-    // Routed via dialect='openai' + minimax.io host heuristic; fetch is bypassed.
-    // OPENAI_API_KEY is NOT forwarded to this custom host - dummy key required from the client.
-    const models = await expectOk(
+  test('openai-compat/openai rejects client-selected hosts and credentials', async () => {
+    await rejects(listModelsRunDispatch(
       { dialect: 'openai', ...openAIShape({ oaiKey: 'dummy', oaiHost: 'https://api.minimax.io' }) } as AixAPI_Access,
-      1, 'openai/minimax',
-    );
-    ok(models.some(m => /minimax/i.test(m.id)), 'minimax: MiniMax-* present');
+    ), /server-managed Bifrost credentials/);
   });
 
   test('openai-compat/openrouter: live listing (endpoint is PUBLIC; any bearer accepted)', { skip: skipIfMissing('OPENROUTER_API_KEY') }, async () => {

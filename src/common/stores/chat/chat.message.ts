@@ -1,4 +1,5 @@
 import type { SkillSnapshot } from '~/common/personal/skills';
+import type { Compaction } from '~/common/personal/compaction';
 import type { NativeHistory } from '~/common/personal/native-history';
 import { agiUuid } from '~/common/util/idUtils';
 
@@ -127,6 +128,7 @@ export type DMessageGenerator = ({
   },
 }) & {
   nativeHistory?: NativeHistory;
+  compaction?: Compaction;
   projectContext?: { projectId: string; instructionRevision: number; files: { id: string; version: string }[] };
   metrics?: DMetricsChatGenerate_Md;   // medium-sized metrics stored in the message
   providerInfraLabel?: string;         // upstream provider that served the request (e.g., OpenRouter provider routing)
@@ -252,6 +254,7 @@ export function duplicateDMessageGenerator(generator: Readonly<DMessageGenerator
         mgt: 'named',
         name: generator.name,
         // ...(generator.xeOpCode ? { xeOpCode: generator.xeOpCode } : {}),
+        ...(generator.compaction ? { compaction: structuredClone(generator.compaction) } : {}),
         ...(generator.nativeHistory ? { nativeHistory: structuredClone(generator.nativeHistory) } : {}),
         ...(generator.projectContext ? { projectContext: { ...generator.projectContext, files: generator.projectContext.files.map(file => ({ ...file })) } } : {}),
         ...(generator.metrics ? { metrics: { ...generator.metrics } } : {}),
@@ -265,6 +268,7 @@ export function duplicateDMessageGenerator(generator: Readonly<DMessageGenerator
         mgt: 'aix',
         name: generator.name,
         aix: { ...generator.aix },
+        ...(generator.compaction ? { compaction: structuredClone(generator.compaction) } : {}),
         ...(generator.nativeHistory ? { nativeHistory: structuredClone(generator.nativeHistory) } : {}),
         ...(generator.projectContext ? { projectContext: { ...generator.projectContext, files: generator.projectContext.files.map(file => ({ ...file })) } } : {}),
         ...(generator.metrics ? { metrics: { ...generator.metrics } } : {}),

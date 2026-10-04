@@ -22,20 +22,20 @@ test('project ownership moves deterministically, re-adding same membership never
   useFolderStore.getState().deleteFolder('two'); assert.equal(useFolderStore.getState().folders.length, 1);
 });
 
-test('actual request assembly includes instructions, skills, project provenance and selected model budget', () => {
+test('actual request assembly includes instructions, skills, project provenance and selected model budget', async () => {
   pauseDiskWrites(true); const chat = createDConversation(); chat.id = 'chat';
   useChatStore.setState({ conversations: [chat] }); useFolderStore.setState({ folders: [project] }); useProjectFilesStore.setState({ files: { original: file } });
   useModelsStore.setState({ llms: [{ id: 'claude-opus-5-5', label: 'Opus', created: 0, description: '', hidden: false, contextTokens: 100000, maxOutputTokens: 8192, interfaces: [], parameterSpecs: [], initialParameters: {}, sId: 'test', vId: 'anthropic' }] });
   const prompt = createDMessageTextContent('user', 'TASK'); prompt.userFlags = [MESSAGE_FLAG_VND_ANT_CACHE_USER];
   prompt.metadata = { selectedSkills: [{ id: 'skill', origin: 'claude', name: 'Test', revision: 'v1', instructions: 'SKILL INSTRUCTIONS', resources: [] }] };
-  const built = assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]);
+  const built = await assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]);
   assert.ok(JSON.stringify(built.system).includes('PROJECT INSTRUCTIONS')); assert.ok(JSON.stringify(built.messages).includes('SKILL INSTRUCTIONS'));
   assert.deepEqual(built.context?.files, []); assert.equal(built.budget.limit, 100000);
   useModelsStore.getState().updateLLM('claude-opus-5-5', { contextTokens: 1000 });
-  assert.equal(assembleRequest(chat.id, chat.chatConfig.llmId, [prompt], { allowOverBudget: true }).budget.fits, false);
-  assert.throws(() => assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]), /Start a shorter chat/);
+  assert.equal((await assembleRequest(chat.id, chat.chatConfig.llmId, [prompt], { allowOverBudget: true })).budget.fits, false);
+  await assert.rejects(() => assembleRequest(chat.id, chat.chatConfig.llmId, [prompt]), /Start a shorter chat/);
   useProjectFilesStore.setState({ files: { original: { ...file, status: 'failed', warnings: ['Scanned PDF requires OCR'] } } });
-  assert.doesNotThrow(() => assembleRequest(chat.id, chat.chatConfig.llmId, [prompt], { allowOverBudget: true }));
+  await assert.doesNotReject(() => assembleRequest(chat.id, chat.chatConfig.llmId, [prompt], { allowOverBudget: true }));
 });
 
 test('removed originals retain historical version ownership across duplicate and disk serialization', () => {
