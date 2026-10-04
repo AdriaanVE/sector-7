@@ -58,3 +58,22 @@ for (const id of ['claude-opus-5-5', 'claude-sonnet-5-5']) {
     assert.equal(request.chatSequence[2].role === 'model' && request.chatSequence[2].nativeHistory?.segments[0].content[0].type, 'thinking');
   });
 }
+
+for (const id of ['claude-opus-5-5', 'claude-sonnet-5-5']) test(`${id} rejects incomplete native search history before dispatch without rewriting it`, async () => {
+  const model: AixAPI_Model = { id, acceptsOutputs: ['text'], vndAntThinkingBudget: 'adaptive', reasoningEffort: 'medium' };
+  const request: AixAPIChatGenerate_Request = { systemMessage: null, chatSequence: [
+    { role: 'user', parts: [{ pt: 'text', text: 'Search then ask me' }] },
+    { role: 'model', parts: [], nativeHistory: { provider: 'anthropic-messages', deployment: 'test', model: id, projection: '', segments: [
+      { id: 'search-turn', content: [{ type: 'server_tool_use', id: 'search', name: 'web_search', input: {} }, { type: 'tool_use', id: 'question', name: 'ask_user_question', input: {} }] },
+    ] } },
+  ] };
+  const original = structuredClone(request);
+  await assert.rejects(prepareNativeRequest(model, request, 'test'), /Retry that search turn or branch/);
+  assert.deepEqual(request, original);
+  const completed = structuredClone(request); const assistant = completed.chatSequence[1];
+  if (assistant.role !== 'model' || !assistant.nativeHistory) throw new Error('Expected native model message');
+  assistant.nativeHistory.segments.push({ id: 'result-segment', content: [{ type: 'web_search_tool_result', tool_use_id: 'search', content: { type: 'web_search_tool_result_error', error_code: 'max_uses_exceeded' } }] });
+  await assert.doesNotReject(prepareNativeRequest(model, completed, 'test'));
+  // Ineligible provider/model history isn't replayed, so it must not block changing models.
+  await assert.doesNotReject(prepareNativeRequest({ ...model, id: 'other' }, request, 'test'));
+});

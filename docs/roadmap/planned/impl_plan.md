@@ -4,7 +4,7 @@ Status: In progress
 Approval: Implementation authorized 2026-10-03; all three product calls resolved (see Human calls)
 Date: 2026-10-03; reconciled 2026-10-04
 Repository: /Users/adriaan.van.erps/Code/sector-7, main
-Current source: a7d9b1f3ea7c9ebd8115dda2beded33c4cd8460f
+Current source: fcecb4d7195c042f9d9eabcc36cca28d3f2f1b51
 Original analyzed base: 80d366a88cc8aa885a2d62ca9c60100eb72af40e, big-AGI Open 2.1.1
 Supersedes: [neon-tokyo-chat.md](neon-tokyo-chat.md) (revised plan) as the implementation reference
 Inputs: [review](neon-tokyo-chat-review.md), [review analysis](../../analysis/neon-tokyo-chat-review-analysis.md),
@@ -582,8 +582,9 @@ browser jumps. Skips and pure tests do not prove live acceptance.
 M3/M4/M5 remain open. Required direct evidence includes clean-profile and server-restart recovery,
 stale/multiple-profile and migration/backup lifecycle, both-model question/answer/following-message
 and mixed-tool/Stop/reload/import paths, dense/streaming/compact/touch/Cleanup navigation and unread
-geometry. Original generated-resource source identity/ownership remains an implementation and
-verification gap at this source. Native chooser durable reconnect and full React local-tool
+geometry. Original generated-resource source identity/ownership is implemented and covered by exact-byte,
+branch, reload and real ZIP regressions at fcecb4d. Direct browser artifact-action acceptance
+remains open. Native chooser durable reconnect and full React local-tool
 Stop/restart acceptance remain bounded. Track later fixes against the current source rather than
 reopening defects already addressed by the newer change records.
 
