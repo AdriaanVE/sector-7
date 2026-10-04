@@ -8,11 +8,21 @@ test('height-derived buckets include first, latest and every exact turn once', (
       const buckets = turnBuckets(count, height);
       const indices = buckets.flatMap(({ start, end }) => Array.from({ length: end - start + 1 }, (_, index) => start + index));
       assert.deepEqual(indices, Array.from({ length: count }, (_, index) => index));
-      assert.ok(buckets.length <= Math.max(1, Math.floor(height / 24)));
+      assert.ok(buckets.length <= Math.max(1, Math.floor(height / 12)));
       if (count) { assert.equal(buckets[0].start, 0); assert.equal(buckets[buckets.length - 1].end, count - 1); }
     }
   }
   assert.ok(turnBuckets(1000, 480).length > turnBuckets(1000, 120).length);
+});
+
+test('the compact rail adds a stripe per turn until its viewport limit', () => {
+  assert.equal(turnBuckets(3, 240).length, 3);
+  assert.equal(turnBuckets(8, 240).length, 8);
+  assert.equal(turnBuckets(18, 240).length, 18);
+  assert.equal(turnBuckets(1000, 240).length, 20);
+  assert.deepEqual(turnBuckets(25, 36), [
+    { start: 0, end: 7 }, { start: 8, end: 15 }, { start: 16, end: 24 },
+  ]);
 });
 
 test('current turn considers the whole ordered visible set and long answers', () => {

@@ -1,5 +1,5 @@
 /** Contiguous ranges keep every turn reachable when the rail runs out of height. */
-export function turnBuckets(turnCount: number, availableHeight: number, targetHeight = 24): { start: number; end: number }[] {
+export function turnBuckets(turnCount: number, availableHeight: number, targetHeight = 12): { start: number; end: number }[] {
   if (turnCount <= 0) return [];
   const count = Math.min(turnCount, Math.max(1, Math.floor(availableHeight / targetHeight)));
   return Array.from({ length: count }, (_, index) => ({
