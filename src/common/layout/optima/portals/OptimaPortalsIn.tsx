@@ -30,7 +30,8 @@ export function OptimaDrawerIn(props: { children: React.ReactNode }) {
   return createPortal(
     <div
       data-optima-piw='drawer' // portal input wrapper
-      onMouseEnter={peekDrawerEnter}
+      // Portaled rail controls are React descendants, but should not trigger drawer peeking.
+      onMouseEnter={event => { if (event.target instanceof Node && event.currentTarget.contains(event.target)) peekDrawerEnter(); }}
       onMouseLeave={peekDrawerLeave}
       style={drawerWrapperStyle}
     >
@@ -57,6 +58,12 @@ export function OptimaPanelIn(props: { children: React.ReactNode }) {
 
 export function OptimaToolbarIn(props: { children: React.ReactNode }) {
   const portalElement = useOptimaPortalTargetElement('optima-portal-toolbar');
+  return portalElement ? createPortal(props.children, portalElement) : null;
+}
+
+
+export function OptimaNavIn(props: { children: React.ReactNode }) {
+  const portalElement = useOptimaPortalTargetElement('optima-portal-nav');
   return portalElement ? createPortal(props.children, portalElement) : null;
 }
 

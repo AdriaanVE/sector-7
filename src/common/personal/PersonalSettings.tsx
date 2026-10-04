@@ -23,7 +23,13 @@ export function PersonalSettings() {
   return <Box sx={{ display: 'grid', gap: 3, maxWidth: 680, minWidth: 0 }}>
     <Box component='section' sx={{ display: 'grid', gap: 1.5 }}>
       <Typography level='title-md'>Personal instructions</Typography>
-      <Textarea minRows={5} value={settings.instructions} aria-label='Personal instructions' onChange={event => settings.setInstructions(event.target.value)} />
+      <Textarea minRows={5} value={settings.instructions} aria-label='Personal instructions' sx={{
+        backgroundColor: 'rgba(var(--joy-palette-neutral-darkChannel) / 0.55)',
+        borderColor: 'rgba(168, 85, 247, .42)',
+        color: 'text.primary',
+        '&:hover': { borderColor: 'rgba(168, 85, 247, .7)' },
+        '@media (forced-colors: active)': { backgroundColor: 'Canvas', borderColor: 'CanvasText', color: 'CanvasText' },
+      }} onChange={event => settings.setInstructions(event.target.value)} />
       <Typography level='body-sm' sx={{ color: 'text.tertiary' }}>Instructions apply to future requests. Project and edited chat instructions follow these.</Typography>
     </Box>
     <Box component='section' sx={{ display: 'grid', gap: 1.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>

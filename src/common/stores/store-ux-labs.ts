@@ -52,7 +52,7 @@ export const useUXLabsStore = create<UXLabsStore>()(
       labsScreenWakeLock: true,
       setLabsScreenWakeLock: (labsScreenWakeLock: boolean) => set({ labsScreenWakeLock }),
 
-      labsShowShortcutBar: true,
+      labsShowShortcutBar: false,
       setLabsShowShortcutBar: (labsShowShortcutBar: boolean) => set({ labsShowShortcutBar }),
 
       labsComposerAttachmentsInline: false,
@@ -71,11 +71,14 @@ export const useUXLabsStore = create<UXLabsStore>()(
       // Migrations:
       // - 1: turn on the screen capture by default (subsequently removed)
       // - 2: turn on adaptive rendering by default ('off' was the Labs default, so it moves to 'auto' once)
-      version: 2,
+      // - 3: hide composer shortcuts once; the Labs toggle can restore them
+      version: 3,
       migrate: (state: any, fromVersion: number): UXLabsStore => {
         // passthrough re-stamps older blobs, keeps unknown fields
         if (fromVersion < 2 && state?.labsAdaptiveRendering === 'off')
-          return { ...state, labsAdaptiveRendering: 'auto' };
+          state = { ...state, labsAdaptiveRendering: 'auto' };
+        if (fromVersion < 3)
+          state = { ...state, labsShowShortcutBar: false };
         return state;
       },
 

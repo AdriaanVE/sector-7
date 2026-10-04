@@ -34,18 +34,18 @@ export function ComposerRim() {
     position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none',
     '& rect': { fill: 'none', width: 'calc(100% - 1px)', height: 'calc(100% - 1px)' },
     '& .composer-border': { stroke: 'rgba(168,85,247,.4)', transition: 'stroke 180ms ease-out' },
-    '& .composer-highlight': { animation: `${orbit} 2s linear both` },
+    '& .composer-highlight': { animation: `${orbit} 2.4s linear both` },
     '@media (prefers-reduced-motion: reduce)': { '& .composer-highlight': { display: 'none' }, '& .composer-border': { transition: 'none' } },
     '@media (forced-colors: active)': { display: 'none' },
   }}>
     <defs>
       <linearGradient id={gradientId} x1='0%' y1='0%' x2='100%' y2='100%'>
-        <stop offset='0%' stopColor='#00FFB3' />
-        <stop offset='50%' stopColor='#A855F7' />
-        <stop offset='100%' stopColor='#00FFB3' />
+        <stop offset='0%' stopColor='#A855F7' />
+        <stop offset='50%' stopColor='#d6b5ff' />
+        <stop offset='100%' stopColor='#A855F7' />
       </linearGradient>
     </defs>
     <rect className='composer-border' x='.5' y='.5' width='100%' height='100%' rx='19.5' strokeWidth='1' />
-    {runId > 0 && <rect key={runId} className='composer-highlight' x='.5' y='.5' width='100%' height='100%' rx='19.5' pathLength='100' stroke={`url(#${gradientId})`} strokeWidth='1' strokeDasharray='12 88' strokeLinecap='round' />}
+    {runId > 0 && <rect key={runId} className='composer-highlight' x='.5' y='.5' width='100%' height='100%' rx='19.5' pathLength='100' stroke={`url(#${gradientId})`} strokeWidth='1' strokeDasharray='15 85' strokeLinecap='round' />}
   </Box>;
 }

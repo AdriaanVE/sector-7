@@ -34,7 +34,7 @@ const DesktopDrawerFixRoot = styled(Box, { name: 'DesktopDrawerFixRoot' })({
 const DesktopDrawerTranslatingSheet = styled(Sheet, { name: 'DesktopDrawerTranslatingSheet' })(({ theme }) => ({
   // layout
   width: '100%',
-  height: '100dvh',
+  height: 'calc(100dvh - var(--Optima-header-height, 0px))',
   zIndex: 1, // just to allocate a layer; this was: themeZIndexDesktopDrawer
 
   // styling
@@ -107,6 +107,7 @@ export function DesktopDrawer(props: { component: React.ElementType, currentApp?
     >
 
       <DesktopDrawerTranslatingSheet
+        id='workspace-sidebar'
         ref={drawerPortalRef}
         component={props.component}
         data-closed={!isDrawerOpen}

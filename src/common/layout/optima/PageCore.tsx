@@ -55,7 +55,7 @@ export const PageCore = (props: {
 
   return <Box
     component={props.component}
-    sx={props.currentApp?.pageBrighter ? pageCoreBrighterSx : props.isFull ? pageCoreFullSx : pageCoreSx}
+    sx={[props.currentApp?.pageBrighter ? pageCoreBrighterSx : props.isFull ? pageCoreFullSx : pageCoreSx, !props.isMobile && { height: 'calc(100dvh - var(--Optima-header-height, 0px))' }]}
   >
 
     {/* Optional deployment MOTD */}
@@ -66,14 +66,14 @@ export const PageCore = (props: {
 
 
     {/* Responsive page bar (pluggable App Center Items and App Menu) - collapsible for chromeless mode */}
-    <ExpanderControlledBox expanded={!isChromeless}>
+    {props.isMobile && <ExpanderControlledBox expanded={!isChromeless}>
       <OptimaBar
         component='header'
         currentApp={props.currentApp}
         isMobile={props.isMobile}
         sx={pageCoreBarSx}
       />
-    </ExpanderControlledBox>
+    </ExpanderControlledBox>}
     {/* Chromeless alternative to the OptimaBar */}
     {isChromeless && <ChromelessFloatingButtons />}
 

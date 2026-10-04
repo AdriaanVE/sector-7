@@ -14,7 +14,6 @@ import { useAreBeamsOpen } from '~/modules/beam/store-beam.hooks';
 import { useCapabilityTextToImage } from '~/modules/t2i/t2i.client';
 
 import type { DConversation, DConversationId } from '~/common/stores/chat/chat.conversation';
-import type { OptimaBarControlMethods } from '~/common/layout/optima/bar/OptimaBarDropdown';
 import { ConfirmationModal } from '~/common/components/modals/ConfirmationModal';
 import { ConversationsManager } from '~/common/chat-overlay/ConversationsManager';
 import { ErrorBoundary } from '~/common/components/ErrorBoundary';
@@ -152,8 +151,7 @@ export function AppChat() {
   const [tradeConfig, setTradeConfig] = React.useState<TradeConfig | null>(null);
   const [flattenConversationId, setFlattenConversationId] = React.useState<DConversationId | null>(null);
   const showNextTitleChange = React.useRef(false);
-  const llmDropdownRef = React.useRef<OptimaBarControlMethods>(null);
-  const personaDropdownRef = React.useRef<OptimaBarControlMethods>(null);
+  const configButtonRef = React.useRef<HTMLButtonElement>(null);
   const composerTextAreaRef = React.useRef<HTMLTextAreaElement>(null);
   const [_activeFolderId, setActiveFolderId] = React.useState<string | null>(null);
   const [liveSvgModeActive, setLiveSvgModeActive] = React.useState(false);
@@ -494,7 +492,7 @@ export function AppChat() {
   const focusedBarContent = React.useMemo(() => beamOpenStoreInFocusedPane
       ? <ChatBarBeam conversationTitle={focusedChatTitle ?? 'No Chat'} beamStore={beamOpenStoreInFocusedPane} isMobile={isMobile} />
       : (barAltTitle === null)
-        ? <ChatBarChat conversationId={focusedPaneConversationId} llmDropdownRef={llmDropdownRef} personaDropdownRef={personaDropdownRef} />
+        ? <ChatBarChat conversationId={focusedPaneConversationId} />
         : <ChatBarAltTitle conversationId={focusedPaneConversationId} conversationTitle={barAltTitle} />
     , [barAltTitle, beamOpenStoreInFocusedPane, focusedChatTitle, focusedPaneConversationId, isMobile],
   );
@@ -607,7 +605,7 @@ export function AppChat() {
     { key: ShortcutKey.Up, ctrl: true, shift: true, action: () => handleMoveFocus(-1, true) },
     { key: ShortcutKey.Down, ctrl: true, shift: true, action: () => handleMoveFocus(1, true) },
     // open the dropdowns
-    { key: 'l', ctrl: true, action: () => llmDropdownRef.current?.openListbox() /*, description: 'Open Models Dropdown'*/ },
+    { key: 'l', ctrl: true, action: () => configButtonRef.current?.click() /*, description: 'Open Models Dropdown'*/ },
 
     // focused conversation llm
     // fun modes (live svg)
@@ -754,6 +752,7 @@ export function AppChat() {
     <Box {...composerAutoHide.compressorProps}>
       <div style={composerAutoHide.compressibleStyle}>
         <Composer
+          configButtonRef={configButtonRef}
           isMobile={isMobile}
           chatLLM={chatLLM}
           composerTextAreaRef={composerTextAreaRef}

@@ -5,6 +5,7 @@ import { Box, MenuList, styled } from '@mui/joy';
 import { ClickAwayListener, Popper, PopperPlacementType, Portal } from '@mui/base';
 
 import { animationOpacityFadeIn } from '~/common/util/animUtils';
+import { appMenuSx } from '~/common/app.theme';
 
 
 // adds the 'sx' prop to the Popper, and defaults zIndex to 1000
@@ -150,15 +151,18 @@ export function CloseablePopup(props: {
 
   const styleMemoSx: SxProps = React.useMemo(() => ({
 
+    ...(props.menu && appMenuSx),
+    ...(props.menu && props.darkenBackdrop && { border: 'none' }),
+
     // style
     backgroundColor: 'background.popup',
-    boxShadow: props.boxShadow ?? 'md',
+    boxShadow: props.boxShadow ?? (props.menu ? appMenuSx.boxShadow : 'md'),
     ...(props.maxHeightGapPx !== undefined ? { maxHeight: `calc(100dvh - ${props.maxHeightGapPx}px)`, overflowY: 'auto' } : {}),
     ...(props.maxWidth !== undefined && { maxWidth: props.maxWidth }),
     ...(props.minWidth !== undefined && { minWidth: props.minWidth }),
 
     // MenuList customizations
-    ...(!props.size && {
+    ...(!props.menu && !props.size && {
       '--ListItem-minHeight': props.dense
         ? '2.25rem' /* 2.25 is the default */
         : '2.5rem', /* we enlarge the default  */
@@ -173,7 +177,7 @@ export function CloseablePopup(props: {
     // inject
     ...(props.sx || {}),
 
-  }), [props.boxShadow, props.maxHeightGapPx, props.maxWidth, props.minWidth, props.size, props.dense, props.bigIcons, props.noBottomPadding, props.noTopPadding, props.sx]);
+  }), [props.menu, props.darkenBackdrop, props.boxShadow, props.maxHeightGapPx, props.maxWidth, props.minWidth, props.size, props.dense, props.bigIcons, props.noBottomPadding, props.noTopPadding, props.sx]);
 
   return <>
 

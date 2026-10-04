@@ -1,29 +1,14 @@
 import * as React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Box, IconButton, Typography } from '@mui/joy';
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import MinimizeIcon from '@mui/icons-material/Minimize';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 // import { isMacUser } from '~/common/util/pwaUtils';
 import { ShortcutKey, ShortcutObject } from '~/common/components/shortcuts/useGlobalShortcuts';
-import { ConfirmationModal } from '~/common/components/modals/ConfirmationModal';
-import { GoodTooltip } from '~/common/components/GoodTooltip';
 import { useGlobalShortcutsStore } from '~/common/components/shortcuts/store-global-shortcuts';
-import { useOverlayComponents } from '~/common/layout/overlays/useOverlayComponents';
 import { useUXLabsStore } from '~/common/stores/store-ux-labs';
 
-
-// configuration
-const COMPOSER_ENABLE_MINIMIZE = false;
-
-
-const hideButtonTooltip = (
-  <Box sx={{ px: 1, py: 0.75, lineHeight: '1.5rem' }}>
-    Hide Shortcuts<br />
-    Enable again in Settings &gt; Labs
-  </Box>
-);
 
 const _styles = {
 
@@ -174,10 +159,9 @@ function ShortcutItem(props: { shortcut: ShortcutObject }) {
 
 export const StatusBarMemo = React.memo(StatusBar);
 
-export function StatusBar(props: { toggleMinimized?: () => void, isMinimized?: boolean }) {
+export function StatusBar(props: { toggleMinimized: () => void, isMinimized: boolean }) {
 
   // state (modifiers pressed/not)
-  const { showPromisedOverlay } = useOverlayComponents();
   // const [ctrlPressed, setCtrlPressed] = React.useState(false);
   // const [shiftPressed, setShiftPressed] = React.useState(false);
 
@@ -218,21 +202,6 @@ export function StatusBar(props: { toggleMinimized?: () => void, isMinimized?: b
     return visibleShortcuts;
   }));
 
-  // handlers
-  const handleHideShortcuts = React.useCallback((event: React.MouseEvent) => {
-    if (event.shiftKey) {
-      console.log('shortcutGroups', useGlobalShortcutsStore.getState().shortcutGroups);
-      return;
-    }
-    showPromisedOverlay('shortcuts-confirm-close', {}, ({ onResolve, onUserReject }) =>
-      <ConfirmationModal
-        open onClose={onUserReject} onPositive={() => onResolve(true)}
-        confirmationText='Remove productivity tips and shortcuts? You can add it back in Settings > Labs.'
-        positiveActionText='Remove'
-      />,
-    ).then(() => useUXLabsStore.getState().setLabsShowShortcutBar(false)).catch(() => null /* ignore closure */);
-  }, [showPromisedOverlay]);
-
   // React to modifiers
   // React.useEffect(() => {
   //   const handleKeyDown = (e: KeyboardEvent) => {
@@ -260,19 +229,9 @@ export function StatusBar(props: { toggleMinimized?: () => void, isMinimized?: b
       sx={_styles.bar}
     >
 
-      {(!props.toggleMinimized || !COMPOSER_ENABLE_MINIMIZE) && !props.isMinimized ? (
-        // Close Button
-        <GoodTooltip variantOutlined arrow placement='top' title={hideButtonTooltip}>
-          <IconButton size='sm' onClick={handleHideShortcuts} sx={_styles.hideButton}>
-            <CloseRoundedIcon />
-          </IconButton>
-        </GoodTooltip>
-      ) : (
-        // Minimize / Maximize Button - note the Maximize icon would be more correct, but also less discoverable
-        <IconButton size='sm' onClick={props.toggleMinimized} sx={_styles.hideButton}>
-          {props.isMinimized ? <ExpandLessIcon /> : <MinimizeIcon />}
-        </IconButton>
-      )}
+      <IconButton size='sm' aria-label={props.isMinimized ? 'Expand composer' : 'Collapse composer'} aria-expanded={!props.isMinimized} onClick={props.toggleMinimized} sx={_styles.hideButton}>
+        {props.isMinimized ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+      </IconButton>
 
       {/* Show all shortcuts */}
       {shortcuts.map((shortcut, idx) => (
