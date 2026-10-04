@@ -1,6 +1,7 @@
 import { ChatAttentionIndicator } from '~/common/personal/ChatAttention';
 import * as React from 'react';
 
+import type { SxProps } from '@mui/joy/styles/types';
 import { Avatar, Box, Dropdown, IconButton, ListDivider, ListItem, ListItemButton, ListItemDecorator, Menu, MenuButton, MenuItem, Sheet, styled, Typography } from '@mui/joy';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
@@ -39,6 +40,48 @@ export const FadeInButton = styled(IconButton)({
   transition: 'opacity 0.16s',
   '&:hover': { opacity: 1 },
 });
+
+const chatActionsMenuSx: SxProps = {
+  zIndex: themeZIndexOverMobileDrawer,
+  minWidth: 200,
+  '--List-padding': '4px',
+  '--List-gap': '1px',
+  '--ListDivider-gap': '4px',
+  '--ListItem-minHeight': '2.25rem',
+  '--ListItem-paddingX': '0.625rem',
+  '--ListItem-paddingY': '0.25rem',
+  '--ListItem-radius': '6px',
+  '--ListItemDecorator-size': '1.75rem',
+  '--Icon-fontSize': '1.0625rem',
+  fontSize: '0.8125rem',
+  backgroundColor: 'background.popup',
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: '10px',
+  boxShadow: '0 12px 32px -12px rgba(0, 0, 0, .6)',
+  '& .MuiMenuItem-root': {
+    fontSize: 'inherit',
+    transition: 'background-color 120ms ease-out, color 120ms ease-out',
+    '& .MuiListItemDecorator-root': { color: 'text.tertiary', transition: 'color 120ms ease-out' },
+    '&:not(.Mui-disabled):hover': {
+      backgroundColor: 'neutral.plainHoverBg',
+      '& .MuiListItemDecorator-root': { color: 'text.primary' },
+    },
+    '&.Mui-focusVisible, &:focus-visible': {
+      outline: '2px solid var(--joy-palette-focusVisible)',
+      outlineOffset: '-2px',
+    },
+    '&.MuiMenuItem-colorDanger .MuiListItemDecorator-root': { color: 'inherit' },
+  },
+  '@media (pointer: coarse)': { '--ListItem-minHeight': '2.75rem' },
+  '@media (prefers-reduced-motion: reduce)': {
+    '& .MuiMenuItem-root, & .MuiListItemDecorator-root': { transition: 'none' },
+  },
+  '@media (forced-colors: active)': {
+    borderColor: 'CanvasText',
+    '& .MuiMenuItem-root.Mui-focusVisible, & .MuiMenuItem-root:focus-visible': { outline: '2px solid Highlight' },
+  },
+};
 
 
 export const ChatDrawerItemMemo = React.memo(ChatDrawerItem, (prev, next) =>
@@ -368,7 +411,7 @@ function ChatDrawerItem(props: {
               aria-label={`Actions for ${title.trim() || CHAT_NOVEL_TITLE}`} sx={{ flexShrink: 0, px: 0.5, minWidth: 28 }}>
               <MoreHorizIcon sx={{ fontSize: 18 }} />
             </MenuButton>
-            <Menu placement='bottom-end' sx={{ zIndex: themeZIndexOverMobileDrawer, minWidth: 190 }}>
+            <Menu placement='bottom-end' sx={chatActionsMenuSx}>
               {!deleteArmed ? <>
                 {folder !== undefined && <MenuItem onClick={() => requestAnimationFrame(() => requestAnimationFrame(handleFolderChangeBegin))}>
                   <ListItemDecorator><FolderOutlinedIcon /></ListItemDecorator>{folder ? `Change folder (${folder.title})` : 'Add to folder'}
@@ -384,7 +427,7 @@ function ChatDrawerItem(props: {
                   <MenuItem onClick={handleConversationExport}><ListItemDecorator><FileUploadOutlinedIcon /></ListItemDecorator>Export chat</MenuItem>
                 </>}
               </> : null}
-              <ListDivider />
+              {!deleteArmed && <ListDivider />}
               <MenuItem key='delete' color='danger' onClick={deleteArmed ? handleConversationDelete : joyKeepPopup(handleDeleteButtonShow)}>
                 <ListItemDecorator>{deleteArmed ? <DeleteForeverIcon /> : <DeleteOutlineIcon />}</ListItemDecorator>{deleteArmed ? 'Confirm deletion' : 'Delete'}
               </MenuItem>
