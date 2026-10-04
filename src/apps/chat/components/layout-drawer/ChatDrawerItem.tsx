@@ -64,8 +64,14 @@ const chatActionsMenuSx: SxProps = {
     transition: 'background-color 120ms ease-out, color 120ms ease-out',
     '& .MuiListItemDecorator-root': { color: 'text.tertiary', transition: 'color 120ms ease-out' },
     '&:not(.Mui-disabled):hover': {
-      backgroundColor: 'neutral.plainHoverBg',
+      backgroundColor: 'neutral.softHoverBg',
+      color: 'text.primary',
       '& .MuiListItemDecorator-root': { color: 'text.primary' },
+      '&.MuiMenuItem-colorDanger': {
+        backgroundColor: 'danger.softHoverBg',
+        color: 'danger.softColor',
+        '& .MuiListItemDecorator-root': { color: 'inherit' },
+      },
     },
     '&.Mui-focusVisible, &:focus-visible': {
       outline: '2px solid var(--joy-palette-focusVisible)',
