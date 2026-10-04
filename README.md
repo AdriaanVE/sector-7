@@ -10,8 +10,10 @@ Use Node 22, 24 or 26 and npm. On macOS, the disk-lock dependency compiles durin
 
 ```sh
 npm ci
-PORT=3004 npm run dev:local
+just up
 ```
+
+`just up` starts the local development app on port 3004. Use `just up 3005` or set `PORT` to choose another port. Without `just`, run `PORT=3004 npm run dev:local`.
 
 Open [127.0.0.1:3004](http://127.0.0.1:3004/). The launcher binds to loopback. No login or account setup is needed. For a production build:
 
@@ -30,7 +32,7 @@ Chat models are `claude-opus-5-5` and `claude-sonnet-5-5`, with medium effort by
 
 ## Workspace
 
-Projects group chats and share instructions. Use Add folder to choose a local repository in the macOS folder browser, then Save the project to give models live file and terminal tools. Files are read only when requested, rather than bulk imported. The connected path is stored locally. Models can inspect and change files and run commands using Sector 7's local process permissions; setting a command's working directory does not create a sandbox. Project file uploads are replaced by these folder connections. Message attachments remain separate.
+Every chat has local file tools for `~/.claude` and `~/.codex`, plus terminal commands, so installing and managing skills does not require a project. These default folders are created when first used if missing. Projects group chats, share instructions and add file connections. Use Add folder to choose a local repository in the macOS folder browser, then Save the project. Files are read only when requested, rather than bulk imported. The connected path is stored locally. Models can inspect and change files and run commands using Sector 7's local process permissions; setting a command's working directory does not create a sandbox. Project file uploads are replaced by these folder connections. Message attachments remain separate.
 
 Chats, projects, processed context and owned assets save automatically on disk. The existing data directory stays `~/Library/Application Support/AI GUI`, including after the Sector 7 rename. Set `AI_GUI_DATA_DIR` to choose another location. Browser caches are disposable. Settings provides backup and recovery controls. [Storage and backup](docs/local-workspace-data.md).
 
@@ -51,4 +53,6 @@ npm run hooks:install
 npm run precommit
 ```
 
-The quality gate includes types, lint and offline tests. Network tests require `npm run test:network` and vendor credentials. See [tests and CI](docs/testing.md) for the audit, commands and main protection status. See [implementation plan](docs/roadmap/planned/impl_plan.md) for the broader scope. The upstream MIT license and attribution remain in [LICENSE](LICENSE); [upstream README](docs/upstream/README.md) preserves the original project documentation.
+The quality gate includes types, lint and offline tests. Network tests require `npm run test:network` and vendor credentials. See [tests and CI](docs/testing.md) for the audit, commands and main protection status. See [implementation plan](docs/roadmap/planned/impl_plan.md) for the broader scope.
+
+Sector 7 is MIT-licensed. Copyright for the Sector 7 modifications belongs to Adriaan Van Erps. The upstream copyright and MIT license notices remain in [LICENSE](LICENSE); [upstream README](docs/upstream/README.md) preserves the original project documentation.

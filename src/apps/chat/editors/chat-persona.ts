@@ -1,6 +1,6 @@
 import { acquireChatRun } from '~/common/personal/chat-run';
 import { pendingFunctionCalls } from '~/common/personal/folder-tools';
-import { dispatchLocalTool, isLocalTool, localToolPhase, localTools } from '~/common/personal/local-tool-dispatch';
+import { dispatchLocalTool, isLocalTool, localToolPhase } from '~/common/personal/local-tool-dispatch';
 import { useFolderStore } from '~/common/stores/folders/store-chat-folders';
 import { assertQuestionGeneration } from '~/common/personal/questions';
 import { create_FunctionCallResponse_ContentFragment } from '~/common/stores/chat/chat.fragments';
@@ -104,7 +104,7 @@ export async function runPersonaOnConversationHead(
         filterCrossModelReasoning(requestHistory, assistantLlmId),
         'conversation',
         conversationId,
-        { abortSignal: abortController.signal, throttleParallelThreads: parallelViewCount, llmUserParametersReplacement: chatParameters(config), antContainerPolicy: getConversation(conversationId)?.freshContainer ? 'fresh' : 'reuse-linear', tools: [...(useFolderStore.getState().folders.find(project => project.conversationIds.includes(conversationId))?.connectedFolders?.length ? localTools : []), { type: 'function_call', function_call: { name: 'ask_user_question', description: 'Ask the user up to three questions when you need a decision or missing information.', input_schema: { properties: { questions: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' }, choices: { type: 'array', items: { type: 'string' } } }, required: ['id', 'text'] } } }, required: ['questions'] } } }], toolsPolicy: { type: 'auto' } },
+        { abortSignal: abortController.signal, throttleParallelThreads: parallelViewCount, llmUserParametersReplacement: chatParameters(config), antContainerPolicy: getConversation(conversationId)?.freshContainer ? 'fresh' : 'reuse-linear', tools: [...assembled.tools, { type: 'function_call', function_call: { name: 'ask_user_question', description: 'Ask the user up to three questions when you need a decision or missing information.', input_schema: { properties: { questions: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, text: { type: 'string' }, choices: { type: 'array', items: { type: 'string' } } }, required: ['id', 'text'] } } }, required: ['questions'] } } }], toolsPolicy: { type: 'auto' } },
         (messageOverwrite: AixChatGenerateContent_DMessageGuts, messageComplete: boolean) => {
 
           // Note: there was an abort check here, but it removed the last packet, which contained the cause and final text.
@@ -146,12 +146,11 @@ export async function runPersonaOnConversationHead(
         const project = useFolderStore.getState().folders.find(project => project.conversationIds.includes(conversationId));
         if (messageStatus.outcome !== 'completed' || abortController.signal.aborted) result = { error: 'Tool was not executed because the response was interrupted.' };
         else if (!isLocalTool(call.name)) result = { error: 'This function is not available in the local app.' };
-        else if (!project) result = { error: 'This chat has no connected project.' };
         else if (++toolCalls > 32 || turn >= 7 || Date.now() > deadline) result = { error: 'Local tool turn limit reached. Ask to continue.' };
         else {
           executedLocal = true;
           cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: localToolPhase(call.name), toolId: call.id } });
-          try { result = await dispatchLocalTool(call, project.id, conversationId, abortController.signal, detail => {
+          try { result = await dispatchLocalTool(call, project?.id, conversationId, abortController.signal, detail => {
             if (lease.isCurrent()) cHandler.conversationOverlayStore.setState({ activity: { opId: assistantMessageId, phase: abortController.signal.aborted ? 'Stopping' : 'Running command', detail: detail.slice(-12000), toolId: call.id } });
           }); }
           catch (error) { result = { error: error instanceof Error ? error.message : 'Local tool failed.' }; }

@@ -4,6 +4,10 @@ import type { DMessage } from '~/common/stores/chat/chat.message';
 import { isContentFragment, isToolInvocationPart, isToolResponsePart } from '~/common/stores/chat/chat.fragments';
 export const connectedFolderSchema = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), name: z.string().min(1).max(256), path: z.string().min(1).max(4096) });
 export type ConnectedFolder = z.infer<typeof connectedFolderSchema>;
+export const DEFAULT_LOCAL_FOLDERS = [{ id: 'local-claude', name: '~/.claude' }, { id: 'local-codex', name: '~/.codex' }] as const;
+export function localFoldersForProject(folders: readonly ConnectedFolder[] = []) {
+  return [...DEFAULT_LOCAL_FOLDERS, ...folders.filter(folder => !DEFAULT_LOCAL_FOLDERS.some(local => local.id === folder.id))];
+}
 const path = z.string().max(2048).default('');
 const base = { folder_id: z.string().min(1).max(128), path };
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/);

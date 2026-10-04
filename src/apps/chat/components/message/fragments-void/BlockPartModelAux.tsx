@@ -109,13 +109,15 @@ function BlockPartModelAux(props: {
   fitScreen: boolean,
   isMobile: boolean,
   inFlux: boolean,
+  expanded?: boolean,
   onFragmentDelete?: (fragmentId: DMessageFragmentId) => void,
   onFragmentReplace?: (fragmentId: DMessageFragmentId, newFragment: DMessageContentFragment) => void,
 }) {
 
   // state
   const [neverExpanded, setNeverExpanded] = React.useState(true);
-  const [expanded, setExpanded] = React.useState(false);
+  const [locallyExpanded, setExpanded] = React.useState(false);
+  const expanded = props.expanded ?? locallyExpanded;
 
   // external state
   const { showPromisedOverlay } = useOverlayComponents();
@@ -131,7 +133,8 @@ function BlockPartModelAux(props: {
   const shownText = shownTextRef.current;
 
   // memo
-  const maybeMarkdown = React.useMemo(() => !ENABLE_MARKDOWN_DETECTION || neverExpanded ? false : _maybeMarkdownReasoning(shownText), [neverExpanded, shownText]);
+  const hasExpanded = !neverExpanded || props.expanded === true;
+  const maybeMarkdown = React.useMemo(() => !ENABLE_MARKDOWN_DETECTION || !hasExpanded ? false : _maybeMarkdownReasoning(shownText), [hasExpanded, shownText]);
 
   // memo style
   const chipSx: SxProps = React.useMemo(() => ({
@@ -148,7 +151,7 @@ function BlockPartModelAux(props: {
 
   // same renderer as the message text: blocks, in-flux last block while streaming
   const { fitScreen, isMobile } = props;
-  const renderedBlocks = React.useMemo(() => neverExpanded ? null : (
+  const renderedBlocks = React.useMemo(() => !hasExpanded ? null : (
     <AutoBlocksRenderer
       text={shownText}
       fromRole='assistant'
@@ -158,7 +161,7 @@ function BlockPartModelAux(props: {
       textRenderVariant={maybeMarkdown ? 'markdown' : 'text'}
       inFlux={inFlux}
     />
-  ), [contentScaling, fitScreen, inFlux, isMobile, maybeMarkdown, neverExpanded, shownText]);
+  ), [contentScaling, fitScreen, hasExpanded, inFlux, isMobile, maybeMarkdown, shownText]);
 
 
   // handlers
@@ -214,7 +217,7 @@ function BlockPartModelAux(props: {
 
     {/* Chip to expand/collapse */}
     <Box data-agi-no-copy /* do not copy these buttons */ sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'space-between' }}>
-      <Chip
+      {props.expanded === undefined && <Chip
         size='sm'
         color={inFlux || expanded ? REASONING_COLOR : 'neutral'}
         variant={expanded ? 'solid' : 'soft'}
@@ -230,7 +233,7 @@ function BlockPartModelAux(props: {
       >
         {/*Show {typeText}*/}
         {inFlux && !expanded && typeText === 'Reasoning' ? `${typeText}...` : `Show ${typeText}`}
-      </Chip>
+      </Chip>}
 
       {expanded && !props.hideActions && (showInline || showDelete) && !!props.auxText && (
         <Box sx={{ display: 'flex', gap: 1 }}>
