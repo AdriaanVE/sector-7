@@ -63,3 +63,11 @@ controls, opening a grouped menu, resizing to change the bucket count, menu clos
 keyboard previews after regrouping. Full-app acceptance remains separate.
 
 The PR contains only the rail changes on current `main`, after the composer PR was merged.
+
+## Compact preview adjustment
+
+The hover card is 272 pixels wide with 12-pixel padding, 13/12-pixel prompt/reply text and
+two reply lines. Its Popper offset is 2 pixels instead of 10, keeping it beside the stripes.
+The browser fixture confirms the width, text sizes and approximately 2-pixel gap. The live
+server on port 3005 compiled the adjustment; an unresponsive app tab prevented another
+full-app interaction check. Focus and rail navigation are unchanged.

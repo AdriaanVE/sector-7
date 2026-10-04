@@ -21,7 +21,7 @@ const targetSx = {
 const menuSx = { maxHeight: '60vh', overflow: 'auto', width: 320, maxWidth: 'calc(100vw - 24px)' } as const;
 const excerptSx = { overflow: 'hidden', display: '-webkit-box', WebkitBoxOrient: 'vertical', overflowWrap: 'anywhere' } as const;
 const previewSx = {
-  p: 2, width: 320, maxWidth: 'calc(100vw - 64px)', borderRadius: 14,
+  p: 1.5, width: 272, maxWidth: 'calc(100vw - 64px)', borderRadius: 10,
   bgcolor: 'background.popup', border: '1px solid', borderColor: 'neutral.700',
   boxShadow: '0 8px 32px rgba(0, 0, 0, .18)',
   animation: `${previewEnter} 140ms ease-out`,
@@ -42,9 +42,9 @@ function TurnPreview({ messages, turn, start, end }: { messages: readonly DMessa
     if (message.role === 'assistant' && message.fragments.some(isTextContentFragment)) { answer = message; break; }
   }
   return <Box>
-    <Typography level='body-sm' sx={{ ...excerptSx, WebkitLineClamp: 2, color: 'text.primary', fontWeight: 500 }}>{turnExcerpt(turn)}</Typography>
-    {answer && <Typography level='body-sm' sx={{ ...excerptSx, WebkitLineClamp: 3, color: 'text.secondary', mt: .75, lineHeight: 1.55 }}>{turnExcerpt(answer, 280)}</Typography>}
-    {start !== end && <Typography level='body-xs' sx={{ mt: 1, color: 'text.tertiary' }}>Turns {start + 1}-{end + 1}. Click to choose a turn.</Typography>}
+    <Typography level='body-sm' sx={{ ...excerptSx, WebkitLineClamp: 2, fontSize: 13, color: 'text.primary', fontWeight: 500 }}>{turnExcerpt(turn)}</Typography>
+    {answer && <Typography level='body-sm' sx={{ ...excerptSx, WebkitLineClamp: 2, fontSize: 12, color: 'text.secondary', mt: .5, lineHeight: 1.5 }}>{turnExcerpt(answer, 280)}</Typography>}
+    {start !== end && <Typography level='body-xs' sx={{ mt: .75, color: 'text.tertiary' }}>Turns {start + 1}-{end + 1}. Click to choose a turn.</Typography>}
   </Box>;
 }
 
@@ -203,6 +203,7 @@ export function TurnNavigator({ messages, listRef }: {
             title: preview, open: previewBucket === index && openBucket === null,
             onOpen: () => setPreviewBucket(index), onClose: () => setPreviewBucket(previous => previous === index ? null : previous),
             placement: 'right' as const, variant: 'plain' as const, describeChild: true,
+            modifiers: [{ name: 'offset', options: { offset: [0, 2] } }],
             enterDelay: 100, enterNextDelay: 0, leaveDelay: 80, sx: previewSx,
           };
           const stripe = <Tooltip key={turns[start].id} {...tooltipProps}>
