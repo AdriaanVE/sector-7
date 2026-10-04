@@ -435,8 +435,8 @@ export function ChatMessageList(props: {
     display: 'flex',
     flexDirection: 'column',
     position: 'relative',
-    pr: conversationMessages.filter(message => message.role === 'user').length >= 3 ? '56px' : undefined,
-  }), [props.sx, conversationMessages]);
+    pl: !props.isMessageSelectionMode && conversationMessages.filter(message => message.role === 'user').length >= 3 ? { xs: '40px', md: '48px' } : undefined,
+  }), [props.sx, props.isMessageSelectionMode, conversationMessages]);
 
 
   // no conversation: sine qua non
@@ -461,7 +461,7 @@ export function ChatMessageList(props: {
   return (
     <List ref={listRef} role='chat-messages-list' sx={listSx} onCopy={clipboardInterceptCtrlCForCleanup}>
 
-      {!props.isMessageSelectionMode && <TurnNavigator messages={filteredMessages} listRef={listRef} />}
+      {!props.isMessageSelectionMode && <TurnNavigator key={conversationId} messages={filteredMessages} listRef={listRef} />}
       {conversationId && <QuestionCard conversationId={conversationId} />}
 
       {props.isMessageSelectionMode && (
