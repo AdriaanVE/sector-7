@@ -62,7 +62,7 @@ const chatActionsMenuSx: SxProps = {
   '& .MuiMenuItem-root': {
     fontSize: 'inherit',
     transition: 'background-color 120ms ease-out, color 120ms ease-out',
-    '& .MuiListItemDecorator-root': { color: 'text.tertiary', transition: 'color 120ms ease-out' },
+    '& .MuiListItemDecorator-root': { '--Icon-color': 'currentColor', color: 'text.tertiary', transition: 'color 120ms ease-out' },
     '&:not(.Mui-disabled):hover': {
       backgroundColor: 'neutral.softHoverBg',
       color: 'text.primary',
