@@ -91,14 +91,14 @@ export function ProjectSidebar({ onActivate, activeConversationId }: { onActivat
           </Button>
           <Dropdown>
             <MenuButton ref={button => { if (button) menuButtons.current.set(project.id, button); else menuButtons.current.delete(project.id); }} className='sector7-nav-control sector7-nav-icon sector7-project-actions' size='sm' variant='plain' color='neutral' aria-label={`Actions for ${project.title}`}><MoreHorizIcon sx={{ fontSize: 18 }} /></MenuButton>
-            <Menu placement='bottom-start' sx={{ zIndex: themeZIndexOverMobileDrawer, p: 1, width: 'min(340px, calc(100vw - 32px))', borderRadius: 'lg', boxShadow: 'lg', '--ListItem-radius': '8px' }}>
+            <Menu placement='bottom-start' sx={{ zIndex: themeZIndexOverMobileDrawer, width: 'min(340px, calc(100vw - 32px))' }}>
               <Box component='li' role='presentation' sx={{ px: 1.25, py: 1, minWidth: 0 }}>
-                <Typography level='title-md' startDecorator={<FolderOutlinedIcon sx={{ fontSize: 18 }} />} sx={{ overflowWrap: 'anywhere' }}>{project.title}</Typography>
-                <Typography level='body-sm' sx={{ mt: 0.5, color: 'text.secondary' }}>{projectChats.length} {projectChats.length === 1 ? 'chat' : 'chats'}</Typography>
+                <Typography level='title-sm' startDecorator={<FolderOutlinedIcon sx={{ fontSize: 17 }} />} sx={{ overflowWrap: 'anywhere' }}>{project.title}</Typography>
+                <Typography level='body-xs' sx={{ mt: 0.5, color: 'text.secondary' }}>{projectChats.length} {projectChats.length === 1 ? 'chat' : 'chats'}</Typography>
               </Box>
               <Box component='li' role='presentation' sx={{ borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider', py: 0.75, my: 0.5 }}>
                 {(project.connectedFolders || []).map(folder => <Box key={folder.id} sx={{ display: 'flex', gap: 1, px: 1.25, py: 0.5, alignItems: 'flex-start' }}><FolderOutlinedIcon sx={{ fontSize: 17, mt: 0.2, color: 'text.tertiary', flexShrink: 0 }} /><Typography level='body-xs' sx={{ fontFamily: 'code', overflowWrap: 'anywhere' }}>{folder.path}</Typography></Box>)}
-                {!project.connectedFolders?.length && <Typography level='body-sm' sx={{ px: 1.25, py: 0.5, color: 'text.tertiary' }}>No source folders</Typography>}
+                {!project.connectedFolders?.length && <Typography level='body-xs' sx={{ px: 1.25, py: 0.5, color: 'text.tertiary' }}>No source folders</Typography>}
               </Box>
               <MenuItem onClick={() => openEditor(project.id)}>Edit project</MenuItem>
               <MenuItem onClick={() => newChat(project.id)}>New chat in project</MenuItem>

@@ -225,7 +225,7 @@ export const richMenuItemSx = {
     opacity: 0.5,
   },
   name: {
-    typography: 'title-sm',
+    fontSize: 'inherit',
     fontWeight: 600,
   },
   description: {

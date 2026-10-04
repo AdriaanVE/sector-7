@@ -2,6 +2,7 @@ import createCache, { StylisElement, StylisPlugin } from '@emotion/cache';
 
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { extendTheme } from '@mui/joy';
+import type { SxProps } from '@mui/joy/styles/types';
 
 import { animationEnterBelow, animationOpacityFadeIn } from '~/common/util/animUtils';
 
@@ -39,6 +40,8 @@ export const themeCodeFontFamilyCss = jetBrainsMono.style.fontFamily;
  * RankingsSection chipNew - keep the two in sync.
  */
 export const brandLimeExtraBadge = '#d4ff3a';
+// Brighter version of the composer contour purple keeps small menu labels readable.
+const brandPurpleText = '#bc7bff';
 
 
 // Motion responds to interaction; focus remains static and visible.
@@ -50,6 +53,61 @@ const controlMotion = {
   '@media (prefers-reduced-motion: reduce)': { transition: 'none', '&:not(:disabled):not([aria-disabled="true"]):hover': { transform: 'none' } },
   '@media (forced-colors: active)': { boxShadow: 'none', '&:focus-visible': { outline: '2px solid Highlight' }, '&:not(:disabled):not([aria-disabled="true"]):hover': { transform: 'none', boxShadow: 'none', outline: '2px solid Highlight' } },
 } as const;
+
+// Shared by Joy menus and controlled menu popups. Embedded panel lists keep their layout.
+export const appMenuSx = {
+  '--List-padding': '4px',
+  '--List-gap': '1px',
+  '--ListDivider-gap': '4px',
+  '--ListItem-minHeight': '2.25rem',
+  '--ListItem-paddingX': '0.625rem',
+  '--ListItem-paddingY': '0.25rem',
+  '--ListItem-radius': '6px',
+  '--ListItemDecorator-size': '1.75rem',
+  '--Icon-fontSize': '1.0625rem',
+  fontSize: '0.8125rem',
+  backgroundColor: 'background.popup',
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: '10px',
+  boxShadow: '0 12px 32px -12px rgba(0, 0, 0, .6)',
+  '& .MuiMenuItem-root': {
+    '--Icon-fontSize': '1.0625rem',
+    fontSize: '0.8125rem',
+    transition: 'background-color 120ms ease-out, color 120ms ease-out',
+    '& .MuiListItemDecorator-root': { '--Icon-color': 'currentColor', transition: 'color 120ms ease-out' },
+    '&.MuiMenuItem-colorNeutral:not([aria-checked="true"]) > .MuiListItemDecorator-root': { color: 'text.tertiary' },
+    '& > .MuiTypography-root': { fontSize: 'inherit' },
+    '&:not(.Mui-disabled):hover': {
+      '--Icon-color': 'currentColor',
+      '& .MuiListItemDecorator-root': { color: 'inherit' },
+    },
+    '&.MuiMenuItem-colorNeutral:not(.Mui-disabled):hover': {
+      backgroundColor: 'neutral.softHoverBg', color: 'text.primary',
+    },
+    '&.MuiMenuItem-colorDanger:not(.Mui-disabled)': {
+      color: brandPurpleText,
+      '--Icon-color': 'currentColor',
+      '&:hover': { backgroundColor: 'rgba(168, 85, 247, .14)' },
+      '&:active': { backgroundColor: 'rgba(168, 85, 247, .18)' },
+    },
+    '&.Mui-focusVisible, &:focus-visible': {
+      outline: '2px solid var(--joy-palette-focusVisible)', outlineOffset: '-2px',
+    },
+  },
+  '@media (pointer: coarse)': { '--ListItem-minHeight': '2.75rem', '& .MuiMenuItem-root': { minHeight: '2.75rem' } },
+  '@media (prefers-reduced-motion: reduce)': {
+    '& .MuiMenuItem-root, & .MuiListItemDecorator-root': { transition: 'none' },
+  },
+  '@media (forced-colors: active)': {
+    borderColor: 'CanvasText', boxShadow: 'none',
+    '& .MuiMenuItem-root.MuiMenuItem-colorDanger:not(.Mui-disabled)': {
+      color: 'CanvasText',
+      '&:hover, &:active': { backgroundColor: 'Highlight', color: 'HighlightText' },
+    },
+    '& .MuiMenuItem-root.Mui-focusVisible, & .MuiMenuItem-root:focus-visible': { outline: '2px solid Highlight' },
+  },
+} as const satisfies SxProps;
 
 export const createAppTheme = (uiComplexityMinimal: boolean) => extendTheme({
   radius: { xs: '4px', sm: '8px', md: '12px', lg: '16px', xl: '20px' },
@@ -153,13 +211,14 @@ export const createAppTheme = (uiComplexityMinimal: boolean) => extendTheme({
       },
     },
 
-    // JoyMenuItem: {
-    //   styleOverrides: {
-    //     root: {
-    //       '--Icon-fontSize': '1rem', // smaller menu(s) icon - default is 1.25rem ('xl', 20px)
-    //     },
-    //   },
-    // },
+    JoyMenu: {
+      styleOverrides: {
+        root: ({ theme, ownerState }) => theme.unstable_sx({
+          ...appMenuSx,
+          ...(ownerState.variant === 'plain' && { border: 'none' }),
+        }),
+      },
+    },
 
     JoyModal: {
       styleOverrides: {
