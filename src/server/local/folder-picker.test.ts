@@ -37,7 +37,7 @@ test('native selection keeps path whitespace, resolves aliases and never reads d
 
 test('only native cancellation is silent; malformed output, filesystem root and native failure are rejected', async () => {
   const pick = (stdout: string, stderr = '', exitCode: number | null = 0) => createNativeFolderPicker({ platform: 'darwin', runner: async () => ({ stdout, stderr, exitCode }) })();
-  assert.deepEqual(await pick('', 'execution error: User canceled. (-128)\n', 1), { cancelled: true });
+  assert.deepEqual(await pick('', '', 2), { cancelled: true });
   await assert.rejects(pick('', 'execution error: Not authorized. (-1743)\n', 1), error => error instanceof WorkspaceError && error.status === 502);
   await assert.rejects(pick('/tmp'), /invalid path/);
   await assert.rejects(pick('/\n'), /filesystem root/);
@@ -89,4 +89,16 @@ test('folder route applies local access restrictions before starting a picker', 
   const aborted = new AbortController(); aborted.abort();
   const cancelled = await POST(request('http://127.0.0.1:3004', '127.0.0.1:3004', aborted.signal));
   assert.equal(cancelled.status, 200); assert.deepEqual(await cancelled.json(), { cancelled: true });
+});
+
+test('connecting a chosen folder rejects non-string paths instead of coercing them', async () => {
+  const { POST } = await import('../../../app/api/local/folders/route');
+  const directory = await mkdtemp(join(tmpdir(), 'sector7-connect-'));
+  try {
+    const response = await POST(new Request('http://127.0.0.1:3004/api/local/folders', {
+      method: 'POST', headers: { host: '127.0.0.1:3004', 'content-type': 'application/json', origin: 'http://127.0.0.1:3004' },
+      body: JSON.stringify({ action: 'connect', path: [directory] }),
+    }));
+    assert.equal(response.status, 400);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

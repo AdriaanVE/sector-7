@@ -1,6 +1,6 @@
 # Configuration
 
-All commands run from the repository root. The supported 0.1 environment is a local Mac browser app with Node 22, 24 or 26 and npm.
+All commands run from the repository root. Version 0.1 supports a local Mac browser server with Node 22, 24 or 26 and npm, and an Electron app for Apple silicon with its runtime bundled.
 
 | Variable | Purpose |
 | --- | --- |
@@ -21,3 +21,9 @@ One server and one browser profile are recommended during this preview. Cross-pr
 ## Electron desktop
 
 The Mac app reads `~/Library/Application Support/Sector 7/config.json` and uses the same Bifrost Keychain defaults and durable `AI GUI` data directory. Default loopback port is 47100; `SECTOR7_DESKTOP_PORT` overrides it. Install output defaults to `desktop/local`. See [Mac app setup](electron-mac.md) for the complete config, packaging and lifecycle details.
+
+## Folder picker
+
+The local launcher compiles the macOS AppKit helper into `build/native/` once and reuses it until its source changes. This uses the same Xcode Command Line Tools required by installation. Compilation happens before the HTTP server starts. `SECTOR7_FOLDER_PICKER` is a server-only absolute executable path set by the browser launcher. If starting Next directly, first build the helper with `node --input-type=module -e "import('./tools/local/build-folder-picker.mjs').then(m => m.buildFolderPicker())"`.
+
+Electron uses a native directory sheet attached to the app window through the preload bridge. Both paths validate the selected directory on the server and keep project changes in the editor draft until Save.

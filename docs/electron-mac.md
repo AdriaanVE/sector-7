@@ -4,7 +4,7 @@ Sector 7 Desktop 0.1.0 packages the existing S7 application, Next.js backend and
 
 ## Build and install
 
-Run from the repository root on your Mac. Use Node 22, 24 or 26 with npm, Python and Xcode Command Line Tools. These are build requirements only.
+Run from the repository root on your Mac. Use Node 22, 24 or 26 with npm, Python and Xcode Command Line Tools. These are build requirements only. Stop any browser production server using this checkout before building; desktop packaging rebuilds the shared web output.
 
 ```sh
 npm ci
@@ -19,6 +19,10 @@ Build output:
 
 - `desktop/out/mac-arm64/Sector 7.app`
 - `desktop/out/Sector-7-0.1.0-arm64.dmg`
+
+After this workflow reaches `main`, open GitHub Actions > Build Mac app > Run workflow and choose `main`. The separate manual workflow runs the quality gate and desktop checks, builds the Apple silicon app/DMG, and uploads them for 14 days. The app is zipped with `ditto` to preserve its bundle permissions. It uses the same ad-hoc signing as local builds and does not publish a GitHub release. Other branches are skipped. Hosted execution must be verified after the workflow is available on `main`.
+
+Builds preserve their staged server under `desktop/.stage-*`. To run the unpackaged Electron source, set `SECTOR7_DESKTOP_STAGE` to one of those absolute staging-directory paths before `npm start --prefix desktop`. Packaged apps use their bundled server and need no stage setting.
 
 The installer copies to the gitignored `desktop/local/Sector 7.app`. It refuses to overwrite an existing app or install while the app is running. To use a different destination:
 
@@ -56,7 +60,7 @@ Help opens the configuration, data and log folders. Logs live in `~/Library/Logs
 
 Closing the window stops active chat work, waits for it to settle, and flushes pending workspace saves before closing. A failed save keeps the window open unless you explicitly choose Close without saving. On macOS, the app remains in the Dock and reopens its window when activated. Cmd+Q performs the same save step and then shuts down the backend; terminal process groups are cleaned up by the existing command manager. A pipe watchdog shuts down the backend if its Electron parent dies. An OS crash can still interrupt writes and leave detached descendants; existing receipt/recovery handling applies.
 
-Connected-folder selection uses S7's existing native macOS picker. Files and commands retain S7's local process permissions. They are not sandboxed to the connected repository. The Finder launch resolves the login shell PATH so development tools remain available. External HTTP(S) and mail links open in your default app; navigation and remote Electron windows are blocked. The renderer has no Node access. A narrow preload only coordinates saving before close.
+Add folder opens Electron's native directory sheet attached to the Sector 7 window. The chosen path still passes through the server's folder validation. Cancellation discards the result; duplicate requests cannot open competing sheets. The browser launcher builds its AppKit helper separately. Files and commands retain S7's local process permissions. They are not sandboxed to the connected repository. The Finder launch resolves the login shell PATH so development tools remain available. External HTTP(S) and mail links open in your default app; navigation and remote Electron windows are blocked. The renderer has no Node access. A narrow preload coordinates saving before close and directory selection. Picker requests require the app window, main frame and exact local origin.
 
 Chrome's Google-backed Web Speech dictation is unavailable in Electron. Dedicated voice/image providers, screen capture, automatic updates, notarization and Intel/universal packaging are outside v0.1. Microphone permission supports audio requests from the app origin only. Normal export/attachment dialogs use Chromium; backups and restore use the existing S7 flows.
 
@@ -64,7 +68,7 @@ Chrome's Google-backed Web Speech dictation is unavailable in Electron. Dedicate
 
 [Claude's implementation plan](../desktop/CLAUDE-PLAN.md) is saved with the source. The implementation adds save-on-close coordination because the existing instance-lock flusher does not run on window close. Authentication gates the HTTP listener before Next, avoiding dependency on edge middleware environment behavior. The original loopback/origin middleware remains active.
 
-`fs-ext` uses the Electron Node ABI. `desktop:build` rebuilds only `desktop/node_modules/fs-ext`, copies its binary into the staged server, and verifies it with Electron's embedded Node before packaging. Root `node_modules` remains compatible with the usual browser launcher. Electron builder never rebuilds the root dependencies. The package is generated from explicit desktop files and a staged standalone server, excluding environment files and build caches.
+`fs-ext` uses the Electron Node ABI. `desktop:build` rebuilds only `desktop/node_modules/fs-ext`, copies its binary into the staged server, and verifies it with Electron's embedded Node before packaging. Root `node_modules` remains compatible with the usual browser launcher. Electron builder never rebuilds the root dependencies. The package is generated from explicit desktop files and a fresh staged standalone server, excluding environment files and build caches. Local staging directories remain under `desktop/.stage-*` for inspection. Set `SECTOR7_DESKTOP_OUTPUT` to an absolute build-output directory to avoid replacing an existing output; the default is `desktop/out`.
 
 ```sh
 npm run tscheck

@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { access, cp, mkdir, readdir, readFile, rm } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { access, cp, mkdir, mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const desktop = join(root, 'desktop');
+const output = process.env.SECTOR7_DESKTOP_OUTPUT || join(desktop, 'out');
+if (!isAbsolute(output)) throw new Error('SECTOR7_DESKTOP_OUTPUT must be an absolute directory path.');
 if (![22, 24, 26].includes(Number(process.versions.node.split('.')[0]))) throw new Error('Build with Node 22, 24 or 26, matching the root dependency installation.');
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('v0.1 packaging requires an Apple silicon Mac.');
 
@@ -25,11 +27,15 @@ await access(join(desktop, 'node_modules', 'electron', 'package.json'));
 run('/usr/bin/xcode-select', ['-p']);
 if (!process.argv.includes('--skip-web-build')) run('npm', ['run', 'build'], root, buildEnv);
 else await access(join(root, 'dist', 'BUILD_ID'));
-const stage = join(desktop, '.stage');
-await rm(stage, { recursive: true, force: true });
+const stage = await mkdtemp(join(desktop, '.stage-'));
 await mkdir(join(stage, 'server'), { recursive: true });
 await cp(join(root, 'dist', 'standalone'), join(stage, 'server'), { recursive: true, verbatimSymlinks: true,
-  filter: source => { const path = relative(join(root, 'dist', 'standalone'), source); return !path.split('/').some(name => name.startsWith('.env')) && path !== 'dist/cache' && !path.startsWith('dist/cache/'); } });
+  filter: source => {
+    const path = relative(join(root, 'dist', 'standalone'), source);
+    return !path.split('/').some(name => name.startsWith('.env'))
+      && path !== 'build' && !path.startsWith('build/')
+      && path !== 'dist/cache' && !path.startsWith('dist/cache/');
+  } });
 await access(join(stage, 'server', 'server.js'));
 await cp(join(root, 'dist', 'static'), join(stage, 'server', 'dist', 'static'), { recursive: true, verbatimSymlinks: true });
 await cp(join(root, 'public'), join(stage, 'server', 'public'), { recursive: true, verbatimSymlinks: true });
@@ -54,7 +60,7 @@ async function scan(directory) {
   }
 }
 await scan(stage);
-run(join(desktop, 'node_modules', '.bin', 'electron-builder'), ['--mac', 'dir', 'dmg', '--arm64', '--config', 'electron-builder.yml', '--publish', 'never'], desktop);
-const appPath = join(desktop, 'out', 'mac-arm64', 'Sector 7.app');
+run(join(desktop, 'node_modules', '.bin', 'electron-builder'), ['--mac', 'dir', 'dmg', '--arm64', '--config', 'electron-builder.yml', `--config.directories.output=${output}`, '--publish', 'never'], desktop, { ...process.env, SECTOR7_DESKTOP_STAGE: stage });
+const appPath = join(output, 'mac-arm64', 'Sector 7.app');
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath]);
-console.log(`Mac app: ${appPath}\nDMG: ${join(desktop, 'out', 'Sector-7-0.1.0-arm64.dmg')}`);
+console.log(`Mac app: ${appPath}\nDMG: ${join(output, 'Sector-7-0.1.0-arm64.dmg')}`);

@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('sector7Desktop', {
+  /** @param {string} requestId */
+  pickFolder: requestId => ipcRenderer.invoke('sector7:pick-folder', requestId),
+  /** @param {string} requestId */
+  cancelFolderPicker: requestId => ipcRenderer.send('sector7:cancel-folder-picker', requestId),
   /** @param {() => Promise<void>} callback */
   onPrepareClose(callback) {
     const handler = async (/** @type {import('electron').IpcRendererEvent} */ _event, /** @type {string} */ id) => {

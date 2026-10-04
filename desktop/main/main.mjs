@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.mjs';
 import { externalUrl, isAppUrl, protectSession } from './security.mjs';
 import { logger, startBackend, stopBackend } from './server.mjs';
+import { createDesktopFolderPicker } from './folder-picker.mjs';
 
 app.setName('Sector 7');
 app.setPath('userData', join(app.getPath('appData'), 'Sector 7'));
@@ -22,6 +23,9 @@ let startup = true;
 let closeReady = false;
 /** @type {{id: string, sender: number, resolve: (error: string | null) => void} | undefined} */ let closeRequest;
 const log = logger(join(app.getPath('logs'), 'main.log'));
+const folderPicker = createDesktopFolderPicker({ window: () => window, origin: () => backend?.origin, show: (parent, options) => dialog.showOpenDialog(parent, options) });
+ipcMain.handle('sector7:pick-folder', (event, id) => folderPicker.pick(event, id));
+ipcMain.on('sector7:cancel-folder-picker', (event, id) => folderPicker.cancel(event, id));
 
 ipcMain.on('sector7:close-ready', event => {
   if (window && event.sender === window.webContents && backend && isAppUrl(event.senderFrame?.url ?? '', backend.origin)) closeReady = true;
@@ -122,7 +126,7 @@ else void app.whenReady().then(async () => {
         { label: 'Open Configuration', click: () => { void shell.openPath(join(app.getPath('userData'), 'config.json')); } },
       ] },
     ]));
-    const resources = app.isPackaged ? process.resourcesPath : join(desktop, '.stage');
+    const resources = app.isPackaged ? process.resourcesPath : process.env.SECTOR7_DESKTOP_STAGE || join(desktop, '.stage');
     backend = await startBackend(config, join(resources, 'server'), app.getPath('logs'));
     startup = false;
     if (quitting) { await quitApp(); return; }

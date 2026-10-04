@@ -3,13 +3,6 @@ import { flushDisk } from './disk-storage';
 import { useChatRuns } from './chat-run';
 import { useQuestionOperations } from './questions';
 
-// The preload exposes only save-on-close coordination, with no filesystem or command access.
-declare global {
-  interface Window {
-    sector7Desktop?: { onPrepareClose: (callback: () => Promise<void>) => () => void };
-  }
-}
-
 export function installDesktopLifecycle(): (() => void) | undefined {
   return window.sector7Desktop?.onPrepareClose(async () => {
     for (const chat of useChatStore.getState().conversations)
