@@ -1,16 +1,15 @@
 import { ChatAttentionIndicator } from '~/common/personal/ChatAttention';
 import * as React from 'react';
 
-import { Avatar, Box, IconButton, ListItem, ListItemButton, ListItemDecorator, Sheet, styled, Tooltip, Typography } from '@mui/joy';
+import { Avatar, Box, Dropdown, IconButton, ListDivider, ListItem, ListItemButton, ListItemDecorator, Menu, MenuButton, MenuItem, Sheet, styled, Typography } from '@mui/joy';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CopyAllIcon from '@mui/icons-material/CopyAll';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import FolderIcon from '@mui/icons-material/Folder';
 import FolderOutlinedIcon from '@mui/icons-material/FolderOutlined';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 import TelegramIcon from '@mui/icons-material/Telegram';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
@@ -23,6 +22,8 @@ import type { DFolder } from '~/common/stores/folders/store-chat-folders';
 import { ANIM_BUSY_TYPING } from '~/common/util/dMessageUtils';
 import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
 import { InlineTextarea } from '~/common/components/InlineTextarea';
+import { joyKeepPopup } from '~/common/components/CloseablePopup';
+import { themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { isDeepEqual } from '~/common/util/hooks/useDeep';
 import { useChatStore } from '~/common/stores/chat/store-chats';
 
@@ -96,6 +97,8 @@ function ChatDrawerItem(props: {
   const [isEditingTitle, setIsEditingTitle] = React.useState(false);
   const [isAutoEditingTitle, setIsAutoEditingTitle] = React.useState(false);
   const [deleteArmed, setDeleteArmed] = React.useState(false);
+  const [actionsOpen, setActionsOpen] = React.useState(false);
+  const actionsButtonRef = React.useRef<HTMLButtonElement>(null);
 
   // derived state
   const { onConversationBranch, onConversationExport, onConversationFolderChange } = props;
@@ -120,10 +123,12 @@ function ChatDrawerItem(props: {
 
 
   // [effect] auto-disarm when inactive
-  const shallClose = deleteArmed && !isActive;
+  const shallClose = (deleteArmed || actionsOpen) && !isActive;
   React.useEffect(() => {
-    if (shallClose)
+    if (shallClose) {
       setDeleteArmed(false);
+      setActionsOpen(false);
+    }
   }, [shallClose]);
 
 
@@ -150,11 +155,11 @@ function ChatDrawerItem(props: {
 
   // Folder change
 
-  const handleFolderChangeBegin = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
+  const handleFolderChangeBegin = React.useCallback(() => {
+    if (!actionsButtonRef.current) return;
     onConversationFolderChange({
       conversationId,
-      anchorEl: event.currentTarget,
+      anchorEl: actionsButtonRef.current,
       currentFolder: folder ?? null,
     });
   }, [conversationId, folder, onConversationFolderChange]);
@@ -187,6 +192,7 @@ function ChatDrawerItem(props: {
     // special case: if 'Shift' is pressed, delete immediately
     if (event.shiftKey) { // immediately delete:conversation
       event.stopPropagation();
+      setActionsOpen(false);
       onConversationDeleteNoConfirmation(conversationId);
       return;
     }
@@ -334,18 +340,9 @@ function ChatDrawerItem(props: {
         backgroundColor: isActive ? 'rgba(180, 198, 209, .08)' : 'transparent',
         borderRadius: 'md',
         mx: 2,
-        '&:hover > button': {
-          opacity: 1, // fade in buttons when hovering, but by default wash them out a bit
-        },
-        // NOTE: we experimented with this code to have the actions fade in on hover, but idk about mobile..
-        //       Buttons Row had the "className='chat-actions'"
-        // '& .chat-actions': {
-        //   opacity: 0,
-        //   transition: 'opacity 0.2s ease-in-out',
-        // },
-        // '&:hover .chat-actions': {
-        //   opacity: 1,
-        // },
+        '& .chat-actions-menu': { opacity: 0 },
+        '&:hover .chat-actions-menu, &:focus-within .chat-actions-menu, & .chat-actions-menu[aria-expanded="true"]': { opacity: 1 },
+        '@media (hover: none)': { '& .chat-actions-menu': { opacity: 1 } },
         ...(isIncognito && {
           backgroundColor: 'background.level2',
           backgroundImage: 'repeating-linear-gradient(45deg, rgba(0,0,0,0.03), rgba(0,0,0,0.03) 10px, transparent 10px, transparent 20px)',
@@ -366,80 +363,36 @@ function ChatDrawerItem(props: {
         {/* Title row */}
         <Box sx={{ display: 'flex', gap: 'var(--ListItem-gap)', minHeight: '2.25rem', alignItems: 'center' }}>
           {titleRowComponent}
+          {isActive && <Dropdown open={actionsOpen} onOpenChange={(_, open) => { setActionsOpen(open); if (!open) setDeleteArmed(false); }}>
+            <MenuButton ref={actionsButtonRef} className='chat-actions-menu' size='sm' variant='plain' color='neutral'
+              aria-label={`Actions for ${title.trim() || CHAT_NOVEL_TITLE}`} sx={{ flexShrink: 0, px: 0.5, minWidth: 28 }}>
+              <MoreHorizIcon sx={{ fontSize: 18 }} />
+            </MenuButton>
+            <Menu placement='bottom-end' sx={{ zIndex: themeZIndexOverMobileDrawer, minWidth: 190 }}>
+              {!deleteArmed ? <>
+                {folder !== undefined && <MenuItem onClick={() => requestAnimationFrame(() => requestAnimationFrame(handleFolderChangeBegin))}>
+                  <ListItemDecorator><FolderOutlinedIcon /></ListItemDecorator>{folder ? `Change folder (${folder.title})` : 'Add to folder'}
+                </MenuItem>}
+                <MenuItem disabled={isEditingTitle || isAutoEditingTitle} onClick={() => requestAnimationFrame(() => requestAnimationFrame(handleTitleEditBegin))}>
+                  <ListItemDecorator><EditRoundedIcon /></ListItemDecorator>Rename
+                </MenuItem>
+                {!isNew && <>
+                  <MenuItem disabled={isEditingTitle || isAutoEditingTitle} onClick={handleTitleEditAuto}>
+                    <ListItemDecorator><AutoFixHighIcon /></ListItemDecorator>Auto-title
+                  </MenuItem>
+                  <MenuItem onClick={handleConversationBranch}><ListItemDecorator><CopyAllIcon /></ListItemDecorator>Duplicate</MenuItem>
+                  <MenuItem onClick={handleConversationExport}><ListItemDecorator><FileUploadOutlinedIcon /></ListItemDecorator>Export chat</MenuItem>
+                </>}
+              </> : null}
+              <ListDivider />
+              <MenuItem key='delete' color='danger' onClick={deleteArmed ? handleConversationDelete : joyKeepPopup(handleDeleteButtonShow)}>
+                <ListItemDecorator>{deleteArmed ? <DeleteForeverIcon /> : <DeleteOutlineIcon />}</ListItemDecorator>{deleteArmed ? 'Confirm deletion' : 'Delete'}
+              </MenuItem>
+              {deleteArmed && <MenuItem onClick={joyKeepPopup(handleDeleteButtonHide)}>Cancel delete</MenuItem>}
+            </Menu>
+          </Dropdown>}
+
         </Box>
-
-        {/* buttons row */}
-        {isActive && (
-          <Box sx={{ display: 'flex', gap: 0.5, minHeight: '2.25rem', alignItems: 'center' }}>
-            {props.showSymbols && <ListItemDecorator />}
-
-            {/* Current Folder color, and change initiator */}
-            {!deleteArmed && <>
-              {(folder !== undefined) && <>
-                <Tooltip arrow disableInteractive title={folder ? `Change Folder (${folder.title})` : 'Add to Folder'}>
-                  {folder ? (
-                    <IconButton size='sm' onClick={handleFolderChangeBegin}>
-                      <FolderIcon style={{ color: folder.color || 'inherit' }} />
-                    </IconButton>
-                  ) : (
-                    <FadeInButton size='sm' onClick={handleFolderChangeBegin}>
-                      <FolderOutlinedIcon />
-                    </FadeInButton>
-                  )}
-                </Tooltip>
-
-                {/*<Divider orientation='vertical' sx={{ my: 1, opacity: 0.5 }} />*/}
-              </>}
-
-              <Tooltip arrow disableInteractive title='Rename'>
-                <FadeInButton size='sm' disabled={isEditingTitle || isAutoEditingTitle} onClick={handleTitleEditBegin}>
-                  <EditRoundedIcon />
-                </FadeInButton>
-              </Tooltip>
-
-              {!isNew && <>
-                <Tooltip arrow disableInteractive color='success' title='Auto-Title'>
-                  <FadeInButton size='sm' disabled={isEditingTitle || isAutoEditingTitle} onClick={handleTitleEditAuto}>
-                    <AutoFixHighIcon />
-                  </FadeInButton>
-                </Tooltip>
-
-                <Tooltip arrow disableInteractive title='Duplicate'>
-                  <FadeInButton size='sm' onClick={handleConversationBranch}>
-                    <CopyAllIcon />
-                  </FadeInButton>
-                </Tooltip>
-
-                <Tooltip arrow disableInteractive title='Export Chat'>
-                  <FadeInButton size='sm' onClick={handleConversationExport}>
-                    <FileUploadOutlinedIcon />
-                  </FadeInButton>
-                </Tooltip>
-              </>}
-
-            </>}
-
-            {/* --> */}
-            <Box sx={{ flex: 1 }} />
-
-            {/* Delete [armed, arming] buttons */}
-            {/*{!searchFrequency && <>*/}
-            {deleteArmed && (
-              <Tooltip color='danger' arrow disableInteractive title='Confirm Deletion'>
-                <FadeInButton key='btn-del' variant='solid' color='success' size='sm' onClick={handleConversationDelete} sx={{ opacity: 1, mr: 0.5 }}>
-                  <DeleteForeverIcon sx={{ color: 'danger.solidBg' }} />
-                </FadeInButton>
-              </Tooltip>
-            )}
-
-            <Tooltip arrow disableInteractive title={deleteArmed ? 'Cancel Delete' : 'Delete'}>
-              <FadeInButton key='btn-arm' size='sm' onClick={deleteArmed ? handleDeleteButtonHide : handleDeleteButtonShow} sx={deleteArmed ? { opacity: 1 } : {}}>
-                {deleteArmed ? <CloseRoundedIcon /> : <DeleteOutlineIcon />}
-              </FadeInButton>
-            </Tooltip>
-            {/*</>}*/}
-          </Box>
-        )}
 
         {/* View places row */}
         {isAlsoOpen && (
