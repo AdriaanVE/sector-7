@@ -12,7 +12,8 @@ import { useFolderStore, DFolder } from '~/common/stores/folders/store-chat-fold
 import { themeZIndexOverMobileDrawer } from '~/common/app.theme';
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import { useProjectFilesStore } from './store-project-files';
-import { flushDisk, localJSON } from './disk-storage';
+import { flushDisk } from './disk-storage';
+import { selectNativeFolder } from './native-folder-selection';
 import { connectedFolderSchema, ConnectedFolder } from './folder-tools';
 import { ProjectFile } from './project-context';
 
@@ -149,7 +150,10 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
     setLoading(true);
     setError('');
     try {
-      const result = await localJSON('folders', { method: 'POST', body: JSON.stringify({ action: 'pick' }), signal: controller.signal });
+      const desktop = window.sector7Desktop;
+      const result = await selectNativeFolder(controller.signal, desktop?.pickFolder && desktop.cancelFolderPicker ? {
+        pickFolder: desktop.pickFolder, cancelFolderPicker: desktop.cancelFolderPicker,
+      } : undefined);
       if (!active.current || result.cancelled) return;
       const folder = connectedFolderSchema.parse(result.folder);
       if (folders.some(item => item.path === folder.path)) throw new Error('This folder is already connected.');

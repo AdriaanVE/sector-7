@@ -15,7 +15,10 @@ export async function POST(request: Request) {
   try {
     const value = await readBoundedJSON(request);
     if (value.action === 'pick') return NextResponse.json(await pickNativeFolder(request.signal));
-    if (value.action === 'connect') return NextResponse.json({ folder: await validateFolderPath(String(value.path)) });
+    if (value.action === 'connect') {
+      if (typeof value.path !== 'string') return NextResponse.json({ error: 'Choose an absolute folder path.' }, { status: 400 });
+      return NextResponse.json({ folder: await validateFolderPath(value.path) });
+    }
     const input = folderToolInput.parse(value.input);
     const projectId = safeId.optional().parse(value.projectId); const conversationId = safeId.parse(value.conversationId); const invocationId = safeId.parse(value.invocationId);
     const { folder, args, responded } = await authorizeFolderInvocation(projectId, conversationId, input.folder_id, invocationId, input.name);
