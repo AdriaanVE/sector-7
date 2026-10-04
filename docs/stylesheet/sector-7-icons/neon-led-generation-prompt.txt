@@ -1,0 +1,10 @@
+Use case: style-transfer.
+Asset type: Sector 7 app icon and multi-resolution favicon.
+Primary request: Rework the S7 mark as a refined neon LED emblem, less filled, with gradients along the light.
+Input images: Image 1 is the original sector-7-s7-neon.png, the exact geometry and identity reference. Image 2 is the Sector 7 Cyberpunk Brand Board, palette and lighting reference only.
+Scene/backdrop: Clean Deep Night #080F14 square background.
+Subject: Angular S on the left and sword-shaped 7 on the right, including its horizontal guard and short vertical handle.
+Style/medium: Slim luminous LED contour channels. Dark recessed interiors instead of broad solid-color faces. Near-white narrow light cores within saturated edges and a controlled soft bloom. Clearly visible dark open spaces. Light primarily defines the outline, with only a very faint internal wash. Crisp intentional LED glow, not polished chrome or a bulky glowing slab.
+Color palette: S contour has a continuous subtle gradient from neon purple #A855F7 to pink #FF4EDB; sword-shaped 7 and guard contour have a subtle mako green #00FFB3 to teal gradient. Keep green dominant on the 7.
+Composition/framing: Preserve the original exact outer silhouette, S shape, sword structure, spacing, proportions and centered placement. Single straight-on icon with clean margins for the glow. Contours thick enough to survive favicon downscaling, without filling the dark interiors.
+Constraints: Change luminous material and lighting only. S and 7 remain clearly separated. Keep guard and handle intact. No new lettering, frame, scenery, sparks, particles, pedestal or watermark. Gradients belong on the luminous strips, not the background. Bloom must not muddy the mark at 16px.
