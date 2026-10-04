@@ -30,6 +30,7 @@ jobs:
             echo 'Set SECTOR7_RELEASE_TOKEN in the main-only release environment with Contents and Pull requests write permissions.' >&2
             exit 1
           fi
+          gh api user --silent
           version=$(node -p "require('./desktop/package.json').version")
           if gh release view "desktop-v${version}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo 'This desktop version already has a release. Bump the desktop package version, or remove an unpublished failed draft before retrying.' >&2
@@ -102,11 +103,14 @@ jobs:
           name: Sector-7-mac-arm64-${{ github.sha }}
           path: desktop/out
 
-      - name: Prepare cask and versioned release
+      - name: Prepare cask checksum
+        run: node desktop/scripts/homebrew-cask.mjs desktop/out/Sector-7-arm64.app.zip
+
+      - name: Publish versioned release
         env:
           GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
         run: |
-          node desktop/scripts/homebrew-cask.mjs desktop/out/Sector-7-arm64.app.zip
+          gh api user --silent
           version=$(node -p "require('./desktop/package.json').version")
           tag="desktop-v${version}"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
