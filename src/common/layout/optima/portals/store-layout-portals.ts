@@ -6,7 +6,8 @@ import { OPTIMA_DEBUG_PORTALS } from '../optima.config';
 export type OptimaPortalId =
   | 'optima-portal-drawer'
   | 'optima-portal-panel'
-  | 'optima-portal-toolbar';
+  | 'optima-portal-toolbar'
+  | 'optima-portal-nav';
 
 
 interface OptimaPortalState {
@@ -35,6 +36,7 @@ export const useLayoutPortalsStore = create<OptimaPortalState & OptimaPortalActi
     'optima-portal-drawer': { element: null, inputs: 0 },
     'optima-portal-panel': { element: null, inputs: 0 },
     'optima-portal-toolbar': { element: null, inputs: 0 },
+    'optima-portal-nav': { element: null, inputs: 0 },
   },
 
   // actions

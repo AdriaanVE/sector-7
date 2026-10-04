@@ -9,7 +9,10 @@ The active chat row uses one three-dot menu instead of a separate action-icon ro
 appears on hover, keyboard focus or while its menu is open, and remains visible on touch
 screens. Folder assignment, rename, automatic title, duplicate and export keep their actions.
 Delete retains confirmation and Shift-click deletion. The bottom chat-data menu uses spacing
-instead of the old horizontal separator.
+instead of the old horizontal separator. Desktop moves import/export to a download-shaped
+control above Settings in the vertical rail, available even with the sidebar closed. Its
+tooltip names import/export and the menu retains filtered deletion. Mobile keeps this
+44px control beside Settings in the drawer.
 
 Rename and folder assignment wait for the menu to restore focus before opening their editors.
 Folder assignment anchors to the persistent menu button. Delete confirmation keeps the same
