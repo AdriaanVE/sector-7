@@ -37,7 +37,15 @@ export async function dispatchLocalTool(call: { id: string; name: string; args: 
     }
     return { ...result, chunks };
   } catch (error) {
-    if (jobId) await localJSON('commands', { method: 'POST', body: JSON.stringify({ ...scope, action: 'cancel', jobId }) }).catch(() => undefined);
-    return { error: error instanceof Error ? error.message : 'Local command stopped.', chunks, stopped: signal.aborted };
+    let message = error instanceof Error ? error.message : 'Local command stopped.';
+    let cancellationUnconfirmed = false;
+    if (jobId) {
+      try { await localJSON('commands', { method: 'POST', signal: AbortSignal.timeout(5000), body: JSON.stringify({ ...scope, action: 'cancel', jobId }) }); }
+      catch {
+        cancellationUnconfirmed = true;
+        message += ' Command cancellation could not be confirmed. Check the connected folder before retrying.';
+      }
+    }
+    return { error: message, chunks, stopped: signal.aborted, ...(cancellationUnconfirmed ? { cancellationUnconfirmed: true } : {}) };
   }
 }

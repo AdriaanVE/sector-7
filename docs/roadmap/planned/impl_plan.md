@@ -4,7 +4,7 @@ Status: In progress
 Approval: Implementation authorized 2026-10-03; all three product calls resolved (see Human calls)
 Date: 2026-10-03; reconciled 2026-10-04
 Repository: /Users/adriaan.van.erps/Code/sector-7, main
-Current source: fcecb4d7195c042f9d9eabcc36cca28d3f2f1b51
+Current source: fb8e0be019ac38d414f4a42d59967c42d5d11e35; current follow-up evidence below
 Original analyzed base: 80d366a88cc8aa885a2d62ca9c60100eb72af40e, big-AGI Open 2.1.1
 Supersedes: [neon-tokyo-chat.md](neon-tokyo-chat.md) (revised plan) as the implementation reference
 Inputs: [review](neon-tokyo-chat-review.md), [review analysis](../../analysis/neon-tokyo-chat-review-analysis.md),
@@ -570,23 +570,34 @@ in [sector-7-later.md](sector-7-later.md), outside current implementation accept
 
 ## Current evidence and remaining acceptance
 
-Source was reconciled at main `a7d9b1f3ea7c9ebd8115dda2beded33c4cd8460f`. The
-[acceptance audit](../../../.ship/current-acceptance-audit.md) inspected an earlier HEAD and
-working tree; subsequent [change records](../../change_details/) establish newer reviewed
-storage bounds/conflict recovery, question reconstruction/composer recovery, completed tool
-summaries and reply-end/navigator source fixes. Read their reported checks as historical evidence,
-not fresh verification by this document edit. Latest navigation record reports 148 offline
-passes, 22 credential-dependent skips, types/source lint, production build and first/middle/latest
-browser jumps. Skips and pure tests do not prove live acceptance.
+Current published source is main `fb8e0be`. The [change records](../../change_details/) report
+reviewed startup/storage, original-file ownership, live question controls, completed summaries
+and reply-end/navigator fixes. The startup milestone passed 171 tests with 22 credential-dependent
+skips, root/tooling types, source lint and production build. These are bounded evidence, not full
+milestone acceptance. The older `.ship` audit is historical.
 
-M3/M4/M5 remain open. Required direct evidence includes clean-profile and server-restart recovery,
-stale/multiple-profile and migration/backup lifecycle, both-model question/answer/following-message
-and mixed-tool/Stop/reload/import paths, dense/streaming/compact/touch/Cleanup navigation and unread
-geometry. Original generated-resource source identity/ownership is implemented and covered by exact-byte,
-branch, reload and real ZIP regressions at fcecb4d. Direct browser artifact-action acceptance
-remains open. Native chooser durable reconnect and full React local-tool
-Stop/restart acceptance remain bounded. Track later fixes against the current source rather than
-reopening defects already addressed by the newer change records.
+Actual restart checks preserved 12 chats, 2 projects and both exact owned asset hashes; live ZIP
+backup matched the workspace and asset endpoints. A separate localhost origin recovered records,
+but this is not a clean browser profile. Real startup/coordinator/Zustand and filesystem tests
+cover migration failures, disk precedence, original preservation, restore and recovery GC.
+Clean-profile, actual browser migration/failed-first-write and isolated corrupt-primary recovery
+UI remain open.
+
+Opus and Sonnet completed real browser question/answer and following ordinary messages; Opus
+also completed native search/question/answer. A Sonnet browser mixed-search turn received missing
+native results from upstream; the app rejects this incomplete history without fabricating blocks.
+Both models completed native fetch and paired question/answer/ordinary follow-ups through the
+actual app route, including production reassembly and client conversion. Successful and failed
+fetch summaries, fragments and native content survived real disk/ZIP restore and exact replay.
+This strengthens protocol/storage evidence, not full browser tool lifecycle acceptance.
+
+M2/M3/M4/M5 remain open. Required evidence includes clean/stale multiple-profile and migration/UI
+backup recovery; question Stop/reload/import and mixed local-tool paths; native chooser selection,
+cancellation and durable reconnect; actual React command Stop/reload/restart without duplicate
+mutation; dense/streaming/compact/touch/Cleanup navigation and stored unread geometry. Generated
+original source identity/ownership is implemented and exact-byte branch/reload/ZIP regressions
+pass, but direct browser artifact-action acceptance remains open. Track remaining checks against
+current source rather than reopening defects addressed by newer change records.
 
 The following checkpoints preserve the original development sequence. Their old pending-review,
 source-path and feature-default wording is historical where these active sections supersede it.
