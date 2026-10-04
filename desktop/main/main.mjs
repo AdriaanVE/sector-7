@@ -114,7 +114,7 @@ if (!app.requestSingleInstanceLock()) app.exit(0);
 else void app.whenReady().then(async () => {
   try {
     config = await loadConfig(app.getPath('userData'));
-    app.setAboutPanelOptions({ applicationName: 'Sector 7', applicationVersion: '0.1.0', copyright: 'Based on big-AGI. MIT license.' });
+    app.setAboutPanelOptions({ applicationName: 'Sector 7', applicationVersion: app.getVersion(), copyright: 'Based on big-AGI. MIT license.' });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: 'Sector 7', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
       { role: 'editMenu' },

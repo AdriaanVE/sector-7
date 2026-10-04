@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const desktop = join(root, 'desktop');
+const { version } = JSON.parse(await readFile(join(desktop, 'package.json'), 'utf8'));
 const output = process.env.SECTOR7_DESKTOP_OUTPUT || join(desktop, 'out');
 if (!isAbsolute(output)) throw new Error('SECTOR7_DESKTOP_OUTPUT must be an absolute directory path.');
 if (![22, 24, 26].includes(Number(process.versions.node.split('.')[0]))) throw new Error('Build with Node 22, 24 or 26, matching the root dependency installation.');
@@ -63,4 +64,4 @@ await scan(stage);
 run(join(desktop, 'node_modules', '.bin', 'electron-builder'), ['--mac', 'dir', 'dmg', '--arm64', '--config', 'electron-builder.yml', `--config.directories.output=${output}`, '--publish', 'never'], desktop, { ...process.env, SECTOR7_DESKTOP_STAGE: stage });
 const appPath = join(output, 'mac-arm64', 'Sector 7.app');
 run('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath]);
-console.log(`Mac app: ${appPath}\nDMG: ${join(output, 'Sector-7-0.1.0-arm64.dmg')}`);
+console.log(`Mac app: ${appPath}\nDMG: ${join(output, `Sector-7-${version}-arm64.dmg`)}`);
