@@ -9,9 +9,11 @@ Rename and folder assignment wait for the menu to restore focus before opening t
 Folder assignment anchors to the persistent menu button. Delete confirmation keeps the same
 focused menu item mounted; closing the menu or deactivating the chat clears confirmation.
 
-The menu uses 13px text, 17px icons, inset rounded rows, a soft hover wash and an inset mako
+The menu uses 13px text, 17px icons, inset rounded rows, a contrasting hover fill with brighter
+text and icons, and an inset mako
 keyboard focus ring. Touch keeps 44px targets; reduced motion removes transitions. These
 styles apply only to the chat action menu and follow Claude's frontend-skill recommendation.
+Delete keeps its danger colors on hover.
 
 Verification: browser checks cover hover/focus visibility, rename focus/save, folder popup,
 export, and delete cancel/confirm including keyboard focus retention. Test fixtures intercept
