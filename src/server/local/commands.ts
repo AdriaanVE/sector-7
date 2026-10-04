@@ -96,8 +96,8 @@ export class LocalCommandManager {
   async start(value: CommandRequest): Promise<CommandResult> {
     const request = commandRequestSchema.parse(value);
     return this.exclusive(async () => {
-      const jobId = createHash('sha256').update(JSON.stringify([request.scope, request.invocationId])).digest('hex');
-      const fingerprint = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+      const receipt = commandReceipt(request);
+      const { jobId, fingerprint } = receipt;
       const existing = await this.load(jobId);
       if (existing) {
         if (existing.receipt.fingerprint !== fingerprint) throw new WorkspaceError('This command invocation already has different arguments.', 409);
@@ -106,8 +106,6 @@ export class LocalCommandManager {
       if ([...this.jobs.values()].filter(job => job.receipt.status === 'running').length >= 2)
         throw new WorkspaceError('Two local commands are already running.', 429);
       await this.prune();
-      const receipt: Receipt = { jobId, invocationId: request.invocationId, scope: request.scope, fingerprint,
-        status: 'running', chunks: [], exitCode: null, signal: null, startedAt: Date.now(), finishedAt: null, truncated: false, outputExpired: false };
       // Reserve on disk before spawning, so a restart cannot repeat a command with side effects.
       await this.persist(receipt);
       const job: Job = { receipt, bytes: 0 }; this.jobs.set(jobId, job);
@@ -198,10 +196,37 @@ export class LocalCommandManager {
     for (const job of this.jobs.values()) if (job.receipt.status === 'running') this.signal(job, 'SIGKILL');
   }
 
+  /** A lost start response must not allow a later start to escape cancellation. */
+  async cancelStart(value: CommandRequest): Promise<CommandResult> {
+    const request = commandRequestSchema.parse(value);
+    return this.exclusive(async () => {
+      const receipt = commandReceipt(request);
+      const existing = await this.load(receipt.jobId);
+      if (existing) {
+        if (existing.receipt.scope !== request.scope || existing.receipt.invocationId !== request.invocationId) throw new WorkspaceError('Command job is not part of this invocation.', 404);
+        this.stop(existing, 'cancelled');
+        return this.result(existing, 0);
+      }
+      receipt.status = 'cancelled'; receipt.finishedAt = Date.now();
+      await this.persist(receipt);
+      return this.result({ receipt, bytes: 0 }, 0);
+    });
+  }
+
   async cancel(scope: string, invocationId: string, jobId: string) {
     const job = await this.authorized(scope, invocationId, jobId);
     this.stop(job, 'cancelled'); return this.result(job, 0);
   }
+}
+
+function commandReceipt(request: z.output<typeof commandRequestSchema>): Receipt {
+  return {
+    jobId: createHash('sha256').update(JSON.stringify([request.scope, request.invocationId])).digest('hex'),
+    fingerprint: createHash('sha256').update(JSON.stringify(request)).digest('hex'),
+    invocationId: request.invocationId, scope: request.scope,
+    status: 'running', chunks: [], exitCode: null, signal: null,
+    startedAt: Date.now(), finishedAt: null, truncated: false, outputExpired: false,
+  };
 }
 
 function commandEnvironment() {

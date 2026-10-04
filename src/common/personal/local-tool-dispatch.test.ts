@@ -104,6 +104,106 @@ test('folder mutation aborted during durable save never reaches the folder API',
   });
 });
 
+for (const failure of ['transport', 'abort', 'body'] as const) test(`${failure} failure before receiving a start identity cancels the invocation independently`, async () => {
+  const controller = new AbortController(); const actions: string[] = [];
+  await withFetch(async (_url, init) => {
+    const request = body(init); actions.push(request.action);
+    if (request.action === 'start') {
+      assert.equal(init?.signal, controller.signal);
+      if (failure === 'body') return new Response('{');
+      if (failure === 'abort') controller.abort(new Error('Stopped during start'));
+      throw failure === 'abort' ? controller.signal.reason : new Error('Start response lost');
+    }
+    assert.deepEqual(request, { ...identity, action: 'cancel-start', command: 'printf output', timeoutMs: 1000 });
+    cancellationSignal(init, controller.signal);
+    return response('cancelled', []);
+  }, async () => {
+    const result = await dispatch(controller.signal);
+    if (failure === 'body') assert.match(String(result.error), /JSON|property|Unexpected/);
+    else assert.equal(result.error, failure === 'abort' ? 'Stopped during start' : 'Start response lost');
+    assert.equal(result.stopped, failure === 'abort');
+    assert.equal(result.cancellationUnconfirmed, undefined);
+    assert.deepEqual(result.chunks, []);
+    assert.deepEqual(actions, ['start', 'cancel-start']);
+  });
+});
+
+for (const status of [403, 409, 429, 503]) test(`HTTP ${status} start failure ${status < 500 ? 'does not reserve cancellation' : 'cancels an uncertain invocation'}`, async () => {
+  const actions: string[] = [];
+  await withFetch(async (_url, init) => {
+    const request = body(init); actions.push(request.action);
+    if (request.action === 'start') return Response.json({ error: 'Start unavailable' }, { status });
+    assert.equal(request.action, 'cancel-start'); cancellationSignal(init);
+    return response('cancelled', []);
+  }, async () => {
+    const result = await dispatch();
+    assert.equal(result.error, 'Start unavailable');
+    assert.equal(result.cancellationUnconfirmed, undefined);
+    assert.deepEqual(actions, status < 500 ? ['start'] : ['start', 'cancel-start']);
+  });
+});
+
+test('lost start response cancellation terminates a real command without replaying it', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'sector7-lost-start-'));
+  const manager = new LocalCommandManager(join(root, 'receipts'));
+  const scope = JSON.stringify([identity.projectId, identity.conversationId, identity.folderId]);
+  const request = { scope, invocationId: identity.invocationId, root, command: '(sleep 1; printf escaped > escaped) & printf ready; wait', timeoutMs: 5000 };
+  const lostCall = { ...call, args: JSON.stringify({ folder_id: identity.folderId, command: request.command, timeout_ms: request.timeoutMs }) };
+  const actions: string[] = [];
+  try {
+    await withFetch(async (_url, init) => {
+      const value = body(init); actions.push(value.action);
+      assert.equal(value.invocationId, request.invocationId);
+      if (value.action === 'start') {
+        const started = await manager.start(request);
+        let ready = false;
+        for (let count = 0; count < 100; count++) {
+          ready = (await manager.poll(scope, request.invocationId, started.jobId)).chunks.some(chunk => chunk.text.includes('ready'));
+          if (ready) break;
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.equal(ready, true);
+        throw new Error('Start response lost after command started');
+      }
+      assert.equal(value.action, 'cancel-start');
+      assert.deepEqual(value, { ...identity, action: 'cancel-start', command: request.command, timeoutMs: request.timeoutMs });
+      cancellationSignal(init);
+      return Response.json(await manager.cancelStart(request));
+    }, async () => {
+      const result = await dispatchLocalTool(lostCall, identity.projectId, identity.conversationId, new AbortController().signal);
+      assert.equal(result.error, 'Start response lost after command started');
+      assert.equal(result.cancellationUnconfirmed, undefined);
+      assert.deepEqual(actions, ['start', 'cancel-start']);
+    });
+    let result = await manager.start(request);
+    for (let count = 0; result.status === 'running' && count < 100; count++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      result = await manager.poll(scope, request.invocationId, result.jobId);
+    }
+    assert.equal(result.status, 'cancelled');
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    await assert.rejects(readFile(join(root, 'escaped')), { code: 'ENOENT' });
+    assert.equal((await new LocalCommandManager(join(root, 'receipts')).start(request)).status, 'cancelled');
+  } finally { manager.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('failed cancellation of a lost start response reports an unconfirmed cancellation', async () => {
+  const actions: string[] = [];
+  await withFetch(async (_url, init) => {
+    const request = body(init); actions.push(request.action);
+    if (request.action === 'start') throw new Error('Start response lost');
+    assert.equal(request.action, 'cancel-start'); cancellationSignal(init);
+    throw new Error('Cancellation unreachable');
+  }, async () => {
+    const result = await dispatch();
+    assert.equal(result.error, 'Start response lost' + cancellationWarning);
+    assert.equal(result.cancellationUnconfirmed, true);
+    assert.equal(result.stopped, false);
+    assert.deepEqual(result.chunks, []);
+    assert.deepEqual(actions, ['start', 'cancel-start']);
+  });
+});
+
 test('abort while waiting to poll sends explicit cancellation without the aborted signal', async () => {
   const controller = new AbortController(); const actions: string[] = [];
   await withFetch(async (_url, init) => {
@@ -165,12 +265,15 @@ for (const failure of ['http', 'transport'] as const) test(`${failure} polling f
   });
 });
 
-test('a stalled cancellation times out with retained output and an unconfirmed cancellation warning', { timeout: 10_000 }, async () => {
+for (const lostStart of [false, true]) test(`a stalled ${lostStart ? 'cancel-start' : 'cancel'} times out with retained output and an unconfirmed cancellation warning`, { timeout: 10_000 }, async () => {
   const controller = new AbortController(); const actions: string[] = [];
   await withFetch(async (_url, init) => {
     const request = body(init); actions.push(request.action);
-    if (request.action === 'start') return response('running');
-    assert.equal(request.action, 'cancel');
+    if (request.action === 'start') {
+      if (lostStart) { controller.abort(new Error('User stopped command')); throw controller.signal.reason; }
+      return response('running');
+    }
+    assert.equal(request.action, lostStart ? 'cancel-start' : 'cancel');
     const signal = cancellationSignal(init, controller.signal);
     return new Promise<Response>((_resolve, reject) => {
       // A real pending HTTP connection keeps Node alive; AbortSignal.timeout alone does not.
@@ -184,8 +287,8 @@ test('a stalled cancellation times out with retained output and an unconfirmed c
     });
     assert.equal(result.error, 'User stopped command' + cancellationWarning);
     assert.equal(result.cancellationUnconfirmed, true); assert.equal(result.stopped, true);
-    assert.deepEqual(result.chunks, [chunk('stdout', 'first')]);
-    assert.deepEqual(actions, ['start', 'cancel']);
+    assert.deepEqual(result.chunks, lostStart ? [] : [chunk('stdout', 'first')]);
+    assert.deepEqual(actions, ['start', lostStart ? 'cancel-start' : 'cancel']);
     assert.ok(Date.now() - started >= 4500);
     assert.ok(Date.now() - started < 9000);
   });
