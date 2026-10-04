@@ -24,6 +24,7 @@ export default defineConfig([{
       ".next*/**", "out/**", "dist/**", // build output (minified bundles trip compat/ on every modern API)
       "public/**",                      // served verbatim, outside the bundler + type program
       ".claude/**",                     // agent tooling, own runtime
+      ".worktrees/**", ".ship/**",       // separate checkouts and local review artifacts
       "electron/**",                    // excluded from the type program (root tsconfig)
       "tools/video/**",                 // self-contained package, own toolchain
     ],

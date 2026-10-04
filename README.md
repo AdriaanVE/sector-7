@@ -47,9 +47,8 @@ The original upstream Docker/deployment assets remain for reference; the support
 The repository includes the complete application, static assets, tests, tooling, lockfile, configuration, license and planning documents. [Folder and file structure](docs/structure.md).
 
 ```sh
-npm run tscheck
-npm run lint
-npm test
+npm run hooks:install
+npm run precommit
 ```
 
-Network tests skip when their credentials are absent. See [implementation plan](docs/roadmap/planned/impl_plan.md) for the broader scope. The upstream MIT license and attribution remain in [LICENSE](LICENSE); [upstream README](docs/upstream/README.md) preserves the original project documentation.
+The quality gate includes types, lint and offline tests. Network tests require `npm run test:network` and vendor credentials. See [tests and CI](docs/testing.md) for the audit, commands and main protection status. See [implementation plan](docs/roadmap/planned/impl_plan.md) for the broader scope. The upstream MIT license and attribution remain in [LICENSE](LICENSE); [upstream README](docs/upstream/README.md) preserves the original project documentation.
