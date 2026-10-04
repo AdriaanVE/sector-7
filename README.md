@@ -4,7 +4,7 @@ A local AI workspace for macOS, built from the MIT-licensed [big-AGI](https://gi
 
 ![Sector 7 chat interface](docs/sector-7.png)
 
-Version **0.1.0** is a working preview. Run it in a browser with a local server, or build the Electron app for Apple silicon. Both use the same disk-backed workspace and server-configured Bifrost connection. No app account or cloud sync is required.
+Version **0.1.0** is a working preview. Run it in a browser with a local server, or build the Electron app for Apple silicon. Both use the same disk-backed workspace and server-configured Bifrost connection. No app account or cloud sync is required. See the [Sector 7 changelog](CHANGELOG.md) for release changes.
 
 ## Features
 
@@ -72,7 +72,7 @@ open "desktop/local/Sector 7.app"
 The build produces:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.0-arm64.dmg`
+- `desktop/out/Sector-7-0.1.1-arm64.dmg`
 
 The installer copies to the ignored `desktop/local/` directory and refuses to overwrite an existing app or install while Sector 7 is running. You can also copy the app from the DMG in Finder. Quit before replacing an installed copy.
 

@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { appendFileSync, mkdirSync, renameSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 /** @param {string} path @param {string[]} [secrets] */
@@ -42,6 +42,13 @@ export function gatewayKey(config) {
   throw new Error(`Bifrost key unavailable. In Keychain Access, check account "${config.bifrost.keychainAccount}" and service "${config.bifrost.keychainService}". Or launch with BIFROST_API_KEY set. No key is saved in the app.`);
 }
 
+function backendExecutable() {
+  if (process.platform !== 'darwin' || !process.versions.electron) return process.execPath;
+  // The helper's LSUIElement keeps the backend out of the Dock and app switcher.
+  const name = `${basename(process.execPath)} Helper`;
+  return join(dirname(dirname(process.execPath)), 'Frameworks', `${name}.app`, 'Contents', 'MacOS', name);
+}
+
 /** @param {ReturnType<import('./config.mjs').validateConfig>} config @param {string} directory @param {string} logs */
 export async function startBackend(config, directory, logs) {
   await availablePort(config.port);
@@ -56,7 +63,7 @@ export async function startBackend(config, directory, logs) {
     ...(config.dataDir ? { AI_GUI_DATA_DIR: config.dataDir } : {}) };
   for (const name of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG']) if (process.env[name]) env[name] = process.env[name];
   const log = logger(join(logs, 'server.log'), [key, token]);
-  const child = spawn(process.execPath, [join(directory, 'server-entry.cjs')], { cwd: directory, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(backendExecutable(), [join(directory, 'server-entry.cjs')], { cwd: directory, env, stdio: ['pipe', 'pipe', 'pipe'] });
   /** @type {Error | undefined} */ let failed;
   child.once('error', () => { failed = new Error('The bundled server could not start. Open the logs for details.'); });
   child.once('exit', code => { failed = new Error(`The bundled server exited (${code ?? 'signal'}). Open the logs for details.`); });

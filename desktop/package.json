@@ -1,6 +1,6 @@
 {
   "name": "sector-7-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Sector 7 local Mac app",
   "author": "AdriaanVE",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test main/*.test.mjs"
+    "test": "node --test main/*.test.mjs && ELECTRON_RUN_AS_NODE=1 electron --test main/server.test.mjs"
   },
   "devDependencies": {
     "@electron/rebuild": "4.2.0",
