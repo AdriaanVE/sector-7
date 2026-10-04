@@ -20,6 +20,12 @@ export async function prepareNativeRequest(model: AixAPI_Model, request: AixAPIC
   for (const [index, message] of safe.chatSequence.entries()) {
     if (message.role !== 'model') continue;
     const history = message.nativeHistory;
+    if (history?.deployment === deployment && history.model === model.id) {
+      const content = history.segments.flatMap(segment => segment.content);
+      const results = new Set(content.flatMap(block => block.type.endsWith('_tool_result') && typeof block.tool_use_id === 'string' ? [block.tool_use_id] : []));
+      const incomplete = content.find(block => block.type === 'server_tool_use' && typeof block.id === 'string' && !results.has(block.id));
+      if (incomplete) throw new Error('A saved native tool call has no result. Retry that search turn or branch before it to continue. The original history was preserved.');
+    }
     const valid = history?.deployment === deployment && history.model === model.id && !!history.requestPrefix
       && history.requestPrefix === await nativeRequestPrefix(model, request, index);
     if (valid) continue;

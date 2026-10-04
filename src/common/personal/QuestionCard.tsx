@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Alert, Box, Button, Chip, Textarea, Typography } from '@mui/joy';
+import { Alert, Box, Button, Textarea, Typography } from '@mui/joy';
 import { useChatStore } from '~/common/stores/chat/store-chats';
 import { answerQuestions, continueQuestions, questionAnswerKey, useQuestionOperations } from './questions';
 import { runPersonaOnConversationHead } from '../../apps/chat/editors/chat-persona';
@@ -25,8 +25,17 @@ export function QuestionCard({ conversationId }: { conversationId: string }) {
   return <Box sx={{ mx: 'auto', p: 2, mb: 2, maxWidth: 800, border: '1px solid', borderColor: 'primary.outlinedBorder', borderRadius: 'lg', bgcolor: 'background.surface', display: 'grid', gap: 1 }}>
     <Typography level='title-lg'>{operation === 'saving' ? 'Saving answer' : answerSaved ? 'Answer saved' : 'Claude needs your answer'}</Typography>
     {unanswered.flatMap(question => question.questions.map(item => <Box key={`${question.invocationId}-${item.id}`} sx={{ display: 'grid', gap: 1 }}>
-      <Typography>{item.text}</Typography><Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{item.choices?.map(choice => <Chip key={choice} component='button' onClick={() => setAnswers(state => ({ ...state, [questionAnswerKey(question.invocationId, item.id)]: choice }))}>{choice}</Chip>)}</Box>
-      <Textarea aria-label={item.text} value={answers[questionAnswerKey(question.invocationId, item.id)] || ''} onChange={event => setAnswers(state => ({ ...state, [questionAnswerKey(question.invocationId, item.id)]: event.target.value }))} />
+      <Typography>{item.text}</Typography>
+      <Box role='group' aria-label={item.text} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {item.choices?.map(choice => {
+          const answerKey = questionAnswerKey(question.invocationId, item.id);
+          const selected = answers[answerKey] === choice;
+          return <Button key={choice} size='sm' variant={selected ? 'soft' : 'outlined'} color={selected ? 'primary' : 'neutral'}
+            aria-pressed={selected} disabled={busy} sx={{ borderRadius: 'lg' }}
+            onClick={() => setAnswers(state => ({ ...state, [answerKey]: selected ? '' : choice }))}>{choice}</Button>;
+        })}
+      </Box>
+      <Textarea disabled={busy} aria-label={item.text} value={answers[questionAnswerKey(question.invocationId, item.id)] || ''} onChange={event => setAnswers(state => ({ ...state, [questionAnswerKey(question.invocationId, item.id)]: event.target.value }))} />
     </Box>))}
     {error && <Alert color='danger'>{error}</Alert>}
     <Box sx={{ display: 'flex', gap: 1 }}><Button loading={busy} onClick={() => void continueChat()}>{answerSaved ? 'Continue' : 'Send answers'}</Button>
