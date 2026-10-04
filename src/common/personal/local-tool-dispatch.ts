@@ -1,6 +1,6 @@
 import type { AixTools_ToolDefinition } from '~/modules/aix/server/api/aix.wiretypes';
 import { folderTools, isFolderTool, folderToolInput } from './folder-tools';
-import { flushDisk, localJSON } from './disk-storage';
+import { flushDisk, localJSON, LocalStorageHTTPError } from './disk-storage';
 import type { Phase } from './attention';
 
 export const localTools: AixTools_ToolDefinition[] = [...folderTools, { type: 'function_call', function_call: { name: 'local_command', description: 'Run a shell command with the connected folder as its working directory. This is the local Mac with the app permissions, not a sandbox. Use for terminal tools, tests and Git. Output is bounded, timeout up to 300 seconds. Do not expose credentials in output.', input_schema: { properties: { folder_id: { type: 'string' }, command: { type: 'string' }, timeout_ms: { type: 'integer' } }, required: ['folder_id', 'command'] } } }];
@@ -38,13 +38,13 @@ export async function dispatchLocalTool(call: { id: string; name: string; args: 
     return { ...result, chunks };
   } catch (error) {
     let message = error instanceof Error ? error.message : 'Local command stopped.';
+    if (!jobId && error instanceof LocalStorageHTTPError && error.status < 500) return { error: message, chunks, stopped: signal.aborted };
     let cancellationUnconfirmed = false;
-    if (jobId) {
-      try { await localJSON('commands', { method: 'POST', signal: AbortSignal.timeout(5000), body: JSON.stringify({ ...scope, action: 'cancel', jobId }) }); }
-      catch {
-        cancellationUnconfirmed = true;
-        message += ' Command cancellation could not be confirmed. Check the connected folder before retrying.';
-      }
+    const cancellation = jobId ? { ...scope, action: 'cancel', jobId } : { ...scope, action: 'cancel-start', command: args.command, timeoutMs: args.timeout_ms };
+    try { await localJSON('commands', { method: 'POST', signal: AbortSignal.timeout(5000), body: JSON.stringify(cancellation) }); }
+    catch {
+      cancellationUnconfirmed = true;
+      message += ' Command cancellation could not be confirmed. Check the connected folder before retrying.';
     }
     return { error: message, chunks, stopped: signal.aborted, ...(cancellationUnconfirmed ? { cancellationUnconfirmed: true } : {}) };
   }

@@ -27,6 +27,7 @@ test('commands use selected cwd, label UTF-8 stdout/stderr, keep receipts and re
     assert.equal((await manager.start(request)).jobId, started.jobId);
     const result = await done(manager, started);
     assert.equal(result.status, 'succeeded');
+    assert.equal((await manager.cancelStart(request)).status, 'succeeded');
     assert.ok(result.chunks.some(chunk => chunk.stream === 'stdout' && chunk.text.includes('héllo')));
     assert.ok(result.chunks.some(chunk => chunk.stream === 'stdout' && chunk.text.includes(root)));
     assert.ok(result.chunks.some(chunk => chunk.stream === 'stderr' && chunk.text.includes('error')));
@@ -59,6 +60,64 @@ test('cancel kills the command process group, timeout terminates and concurrency
     const failed = await manager.start({ scope: 'chat', invocationId: 'failed', root, command: 'exit 7' });
     assert.equal((await done(manager, failed)).exitCode, 7);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('cancel-start reserves a durable cancelled invocation before any delayed start', async () => {
+  const { root, manager } = await fixture();
+  try {
+    const request = { scope: 'chat', invocationId: 'never-started', root, command: 'printf escaped > executions' };
+    const cancelled = await manager.cancelStart(request);
+    assert.equal(cancelled.status, 'cancelled');
+    assert.ok(cancelled.finishedAt !== null);
+    assert.deepEqual(cancelled.chunks, []);
+    const receipt = JSON.parse(await readFile(join(root, 'receipts', `${cancelled.jobId}.json`), 'utf8'));
+    assert.equal(receipt.status, 'cancelled');
+    assert.equal((await manager.start({ ...request, timeoutMs: 60_000 })).jobId, cancelled.jobId);
+    const restarted = new LocalCommandManager(join(root, 'receipts'));
+    assert.equal((await restarted.start(request)).status, 'cancelled');
+    assert.equal((await restarted.cancelStart(request)).status, 'cancelled');
+    for (const changed of [{ command: 'true' }, { root: tmpdir() }, { timeoutMs: 1 }]) {
+      await assert.rejects(restarted.start({ ...request, ...changed }), /different arguments/);
+    }
+    await assert.rejects(readFile(join(root, 'executions')), { code: 'ENOENT' });
+  } finally { manager.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('cancel-start and start serialize in either request order and stop descendants', async () => {
+  const { root, manager } = await fixture();
+  try {
+    for (const first of ['cancel', 'start'] as const) {
+      const request = { scope: 'chat', invocationId: first, root, command: `(sleep 1; printf escaped > ${first}-escaped) & wait` };
+      const operations = first === 'cancel'
+        ? [manager.cancelStart(request), manager.start(request)]
+        : [manager.start(request), manager.cancelStart(request)];
+      const [one, two] = await Promise.all(operations);
+      assert.equal(one.jobId, two.jobId);
+      assert.equal(one.status, first === 'start' ? 'running' : 'cancelled');
+      assert.equal((await done(manager, two)).status, 'cancelled');
+      assert.equal((await manager.start(request)).status, 'cancelled');
+    }
+    await sleep(1100);
+    for (const first of ['cancel', 'start']) await assert.rejects(readFile(join(root, `${first}-escaped`)), { code: 'ENOENT' });
+  } finally { manager.shutdown(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('cancel-start reaches its invocation after root changes and leaves other scopes running', async () => {
+  const { root, manager } = await fixture();
+  try {
+    const request = { scope: 'chat', invocationId: 'identity', root, command: 'sleep 30' };
+    const started = await manager.start(request);
+    const other = await manager.start({ ...request, scope: 'other-chat', command: 'printf completed' });
+    assert.notEqual(other.jobId, started.jobId);
+    await manager.cancelStart({ ...request, root: tmpdir() });
+    assert.equal((await done(manager, started)).status, 'cancelled');
+    let remaining = other;
+    for (let count = 0; remaining.status === 'running' && count < 100; count++) {
+      await sleep(20);
+      remaining = await manager.poll('other-chat', request.invocationId, other.jobId);
+    }
+    assert.equal(remaining.status, 'succeeded');
+  } finally { manager.shutdown(); await rm(root, { recursive: true, force: true }); }
 });
 
 test('output is capped, UTF-8 is complete, and app inference keys are not inherited', async () => {
@@ -103,19 +162,38 @@ test('command route binds saved project/chat/folder invocation, rejects tamperin
   const { validateFolderPath } = await import('./folders');
   const { emptyWorkspace } = await import('~/common/personal/workspace-schema');
   const { commitWorkspace } = await import('./workspace');
+  const { create_FunctionCallInvocation_ContentFragment, create_FunctionCallResponse_ContentFragment } = await import('~/common/stores/chat/chat.fragments');
+  const { createDMessageFromFragments } = await import('~/common/stores/chat/chat.message');
   const root = await mkdtemp(join(tmpdir(), 'sector7-command-route-'));
   const previous = process.env.AI_GUI_DATA_DIR; process.env.AI_GUI_DATA_DIR = root;
   try {
     const folder = await validateFolderPath(root); const workspace = emptyWorkspace();
     const invocationId = 'route-call'; const command = 'sleep 30';
     workspace.stores['app-folders'] = { version: 1, state: { folders: [{ id: 'project', title: 'Project', conversationIds: ['chat'], instructions: '', fileIds: [], revision: 1, connectedFolders: [folder] }], enableFolders: true } };
-    workspace.stores['app-chats'] = { version: 5, state: { conversations: [{ id: 'chat', messages: [{ id: 'message', role: 'assistant', tokenCount: 0, created: 0, updated: null, fragments: [{ ft: 'content', fId: 'fragment', part: { pt: 'tool_invocation', id: invocationId, invocation: { type: 'function_call', name: 'local_command', args: JSON.stringify({ folder_id: folder.id, command }) } } }] }], created: 0, updated: null, tokenCount: 0, systemPurposeId: '' }] } };
-    await commitWorkspace(workspace, 0, root);
+    const message = createDMessageFromFragments('assistant', [create_FunctionCallInvocation_ContentFragment(invocationId, 'local_command', JSON.stringify({ folder_id: folder.id, command }))]);
+    workspace.stores['app-chats'] = { version: 5, state: { conversations: [{ id: 'chat', messages: [message], created: 0, updated: null, tokenCount: 0, systemPurposeId: '' }] } };
+    const lateId = 'late-start'; const lateCommand = 'printf escaped > late-start';
+    message.fragments.push(create_FunctionCallInvocation_ContentFragment(lateId, 'local_command', JSON.stringify({ folder_id: folder.id, command: lateCommand })));
+    const saved = await commitWorkspace(workspace, 0, root);
     const identity = { projectId: 'project', conversationId: 'chat', folderId: folder.id, invocationId };
     const request = (body: object, signal?: AbortSignal, origin = 'http://127.0.0.1:3004') => new Request('http://127.0.0.1:3004/api/local/commands', { method: 'POST', headers: { host: '127.0.0.1:3004', 'content-type': 'application/json', origin }, body: JSON.stringify(body), signal });
     assert.equal((await POST(request({ ...identity, action: 'start', command: 'false' }))).status, 409);
     assert.equal((await POST(request({ ...identity, conversationId: 'other', action: 'start', command }))).status, 403);
     assert.equal((await POST(request({ ...identity, action: 'start', command }, undefined, 'http://evil.example'))).status, 403);
+    const lateIdentity = { ...identity, invocationId: lateId };
+    for (const tamper of [{ command: 'false' }, { timeoutMs: 1000 }])
+      assert.equal((await POST(request({ ...lateIdentity, action: 'cancel-start', command: lateCommand, ...tamper }))).status, 409);
+    for (const tamper of [{ projectId: 'other' }, { conversationId: 'other' }, { folderId: 'other' }, { invocationId: 'unsaved' }])
+      assert.equal((await POST(request({ ...lateIdentity, action: 'cancel-start', command: lateCommand, ...tamper }))).status, 403);
+    assert.equal((await POST(request({ ...lateIdentity, action: 'cancel-start', command: lateCommand }, undefined, 'http://evil.example'))).status, 403);
+    const cancelled = await POST(request({ ...lateIdentity, action: 'cancel-start', command: lateCommand }));
+    assert.equal(cancelled.status, 200);
+    const cancelledJob = await cancelled.json(); assert.equal(cancelledJob.status, 'cancelled');
+    const late = await POST(request({ ...lateIdentity, action: 'start', command: lateCommand, timeoutMs: 60_000 }));
+    assert.equal(late.status, 200);
+    const lateJob = await late.json(); assert.equal(lateJob.jobId, cancelledJob.jobId); assert.equal(lateJob.status, 'cancelled');
+    assert.equal(JSON.parse(await readFile(join(root, 'commands', `${cancelledJob.jobId}.json`), 'utf8')).status, 'cancelled');
+    await assert.rejects(readFile(join(root, 'late-start')), { code: 'ENOENT' });
     const aborted = new AbortController(); aborted.abort();
     const start = await POST(request({ ...identity, action: 'start', command }, aborted.signal));
     assert.equal(start.status, 200); const job = await start.json();
@@ -125,6 +203,12 @@ test('command route binds saved project/chat/folder invocation, rejects tamperin
       if (result.status !== 'running') break; await sleep(20);
     }
     assert.equal(result.status, 'cancelled');
+    message.fragments.push(create_FunctionCallResponse_ContentFragment(lateId, false, 'local_command', '{"status":"cancelled"}', 'client'));
+    await commitWorkspace({ ...workspace, revision: saved.revision }, saved.revision, root);
+    assert.equal((await POST(request({ ...lateIdentity, action: 'start', command: lateCommand }))).status, 409);
+    const settledCancellation = await POST(request({ ...lateIdentity, action: 'cancel-start', command: lateCommand }));
+    assert.equal(settledCancellation.status, 200);
+    assert.equal((await settledCancellation.json()).status, 'cancelled');
   } finally {
     if (previous === undefined) delete process.env.AI_GUI_DATA_DIR; else process.env.AI_GUI_DATA_DIR = previous;
     await rm(root, { recursive: true, force: true });
