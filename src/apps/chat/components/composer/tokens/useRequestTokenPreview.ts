@@ -23,7 +23,7 @@ interface PreviewInput {
   pendingParts: DComposerPendingPart[] | null;
 }
 
-type Preview = (ReturnType<typeof assembleRequest> & { error: string }) | { error: string };
+type Preview = (Awaited<ReturnType<typeof assembleRequest>> & { error: string }) | { error: string };
 
 /** Reuse unchanged fragments after typing settles. Final Send always assembles without this cache. */
 export function useRequestTokenPreview(input: PreviewInput): Preview | null {
@@ -48,7 +48,7 @@ export function useRequestTokenPreview(input: PreviewInput): Preview | null {
           ...(input.pendingParts || []).map(part => createHostedResourceContentFragment(part.resource)),
           ...input.attachmentDrafts.flatMap(draft => draft.outputFragments)]);
         if (input.selectedSkills.length) draft.metadata = { selectedSkills: input.selectedSkills };
-        result = { ...assembleRequest(chat.id, llm.id, [...chat.messages, draft], { allowOverBudget: true, estimateFragments: tokenizerReady ? counter : estimateTokensForFragments }), error: '' };
+        result = { ...await assembleRequest(chat.id, llm.id, [...chat.messages, draft], { allowOverBudget: true, estimateFragments: tokenizerReady ? counter : estimateTokensForFragments }), error: '' };
       } catch (error) {
         result = { error: error instanceof Error ? error.message : 'Context could not be estimated.' };
       }

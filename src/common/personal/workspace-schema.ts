@@ -1,6 +1,7 @@
 import { artifactReferenceSchema } from './artifact-schema';
 import { connectedFolderSchema } from './folder-tools';
 import { skillSnapshotSchema } from './skills';
+import { compactionSchema } from './compaction';
 import { nativeHistorySchema } from './native-history';
 import * as z from 'zod/v4';
 import { CHAT_MODELS, normalizeChatConfig } from './chat-config';
@@ -49,8 +50,8 @@ const part = z.discriminatedUnion('pt', [
 const fragment = z.object({ ft: z.enum(['content', 'attachment', 'void']), fId: safeId, part, artifact: artifactReferenceSchema.optional() }).passthrough();
 const projectContext = z.object({ projectId: safeId, instructionRevision: timestamp, files: z.array(z.object({ id: safeId, version: z.string().min(1) })) });
 const generator = z.discriminatedUnion('mgt', [
-  z.object({ mgt: z.literal('named'), name: z.string(), nativeHistory: nativeHistorySchema.optional(), projectContext: projectContext.optional() }).passthrough(),
-  z.object({ mgt: z.literal('aix'), name: z.string(), aix: z.object({ mId: z.string(), vId: z.string() }), nativeHistory: nativeHistorySchema.optional(), projectContext: projectContext.optional() }).passthrough(),
+  z.object({ mgt: z.literal('named'), name: z.string(), nativeHistory: nativeHistorySchema.optional(), compaction: compactionSchema.optional(), projectContext: projectContext.optional() }).passthrough(),
+  z.object({ mgt: z.literal('aix'), name: z.string(), aix: z.object({ mId: z.string(), vId: z.string() }), nativeHistory: nativeHistorySchema.optional(), compaction: compactionSchema.optional(), projectContext: projectContext.optional() }).passthrough(),
 ]);
 const message = z.object({ id: safeId, role: z.enum(['user', 'assistant', 'system']), fragments: z.array(fragment), metadata: z.object({ selectedSkills: z.array(skillSnapshotSchema).optional() }).passthrough().optional(), generator: generator.optional(), created: timestamp, updated: timestamp.nullable(), tokenCount: timestamp, userFlags: z.array(z.string()).optional(), pendingIncomplete: z.boolean().optional() }).passthrough();
 const pendingQuestion = questionSchema.extend({ invocationId: z.string().min(1), messageId: safeId, model: z.string(), answered: z.boolean().optional() });

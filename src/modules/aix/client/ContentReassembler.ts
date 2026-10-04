@@ -974,6 +974,10 @@ export class ContentReassembler {
 
   private onSetVendorState({ state, vendor }: Extract<AixWire_Particles.PartParticleOp, { p: 'svs' }>): void {
 
+    if (vendor === 'openai-compaction') {
+      this.S.generator = { ...this.S.generator, compaction: structuredClone(state) };
+      return;
+    }
     if (vendor === 'anthropic-native') {
       const prior = this.S.generator.nativeHistory;
       const segments = prior?.segments.filter(segment => segment.id !== state.segment.id) ?? [];

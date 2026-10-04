@@ -11,7 +11,7 @@ export const questionSchema = z.object({ questions: z.array(z.object({
 export type QuestionInput = z.infer<typeof questionSchema>;
 export type PendingQuestion = QuestionInput & { invocationId: string; messageId: string; model: string; answered?: boolean };
 export type Outcome = 'ok' | 'error' | 'stopped' | 'interrupted';
-export type Phase = 'Stopping' | 'Connecting' | 'Thinking' | 'Searching' | 'Running code' | 'Listing files' | 'Reading files' | 'Editing files' | 'Running command' | 'Responding';
+export type Phase = 'Stopping' | 'Connecting' | 'Thinking' | 'Searching' | 'Running code' | 'Listing files' | 'Reading files' | 'Editing files' | 'Running command' | 'Running subagent' | 'Responding';
 export interface Attention { lastCompletedMessageId?: string; lastSeenMessageId?: string; lastOutcome?: Outcome; pendingQuestions?: PendingQuestion[] }
 export function attentionLabel(attention: Attention, working?: Phase | null): string | null {
   if (working) return working;
@@ -27,9 +27,9 @@ export function questionInvocations(message: DMessage, model: string): PendingQu
   return message.fragments.filter(isContentFragment).flatMap(fragment => {
     if (!isToolInvocationPart(fragment.part) || fragment.part.invocation.type !== 'function_call' || fragment.part.invocation.name !== 'ask_user_question' || answered.has(fragment.part.id)) return [];
     let parsed: unknown;
-    try { parsed = JSON.parse(fragment.part.invocation.args); } catch { throw new Error('Claude supplied an incomplete question. Retry the message.'); }
+    try { parsed = JSON.parse(fragment.part.invocation.args); } catch { throw new Error('The model supplied an incomplete question. Retry the message.'); }
     const result = questionSchema.safeParse(parsed);
-    if (!result.success) throw new Error('Claude supplied an invalid question. Retry the message.');
+    if (!result.success) throw new Error('The model supplied an invalid question. Retry the message.');
     return [{ ...result.data, invocationId: fragment.part.id, messageId: message.id, model }];
   });
 }
@@ -46,6 +46,7 @@ export function messagePhase(message: Pick<DMessage, 'fragments'>): Phase {
       if (name === 'folder_read') return 'Reading files';
       if (/folder_edit|folder_write|folder_move|folder_delete/.test(name)) return 'Editing files';
       if (name === 'local_command') return 'Running command';
+      if (name === 'spawn_agent') return 'Running subagent';
       if (/code|bash|python/.test(name)) return 'Running code';
       if (/search|fetch/.test(name)) return 'Searching';
     }

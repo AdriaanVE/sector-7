@@ -1,5 +1,6 @@
 import { nativeHistorySchema, type NativeHistory } from '~/common/personal/native-history';
 import * as z from 'zod/v4';
+import { compactionSchema, type Compaction } from '~/common/personal/compaction';
 
 // Used to align Particles to the Typescript definitions from the frontend-side, on 'chat.fragments.ts'
 import type { DMessageFragmentVendorStateKnown, DMessageToolResponsePart } from '~/common/stores/chat/chat.fragments';
@@ -359,6 +360,7 @@ export namespace AixWire_Content {
   export const ModelMessage_schema = z.object({
     role: z.literal('model'),
     nativeHistory: nativeHistorySchema.optional(),
+    compaction: compactionSchema.optional(),
     parts: z.array(z.discriminatedUnion('pt', [
       AixWire_Parts.TextPart_schema,
       AixWire_Parts.InlineAudioPart_schema,
@@ -876,6 +878,7 @@ export namespace AixWire_Particles {
       | { kind: 'inline-download', mimeType: string, b64: string, filename?: string } // inline bytes (e.g. Gemini code-exec file): client downloads & discards, never stored/re-fetchable
       )
     | { p: 'svs' } & ( // set vendor state - vendor-specific opaque protocol state
+      | { vendor: 'openai-compaction', state: Compaction }
       | { vendor: 'anthropic-native', state: Omit<NativeHistory, 'projection' | 'segments'> & { segment: NativeHistory['segments'][number] } }
       | { vendor: 'anthropic', state: { container: { id: string; expiresAt: string } } } // message-level - container reuse
       | { vendor: 'openai-container', state: { container: { id: string; expiresAt: string } } } // message-level - OpenAI Responses code-interpreter container reuse; 20min TTL stamped by parser

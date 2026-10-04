@@ -295,9 +295,14 @@ export async function createChatGenerateDispatch(access: AixAPI_Access, model: A
       if (isResponsesAPI) {
         // parser namespace for the reasoning continuity blobs (vendor-private keys + server-side ids), see the note below
         const responsesVendor = openAIDialectToRspVendor(dialect);
+        const connection = openAIAccess(access, model.id, OPENAI_API_PATHS.responses);
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify({ url: connection.url, credentials: Array.from(new Headers(connection.headers).entries()).filter(([name]) => ['authorization', 'openai-organization', 'openai-project'].includes(name)) })));
+        const deployment = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        for (const message of chatGenerate.chatSequence) if (message.role === 'model' && message.compaction && message.compaction.deployment !== deployment)
+          throw new Error('The Sol connection changed since compaction. Retry with the original history.');
         return {
           request: {
-            ...openAIAccess(access, model.id, OPENAI_API_PATHS.responses),
+            ...connection,
             method: 'POST',
             /**
              * xAI uses its own Responses API adapter.
@@ -318,8 +323,8 @@ export async function createChatGenerateDispatch(access: AixAPI_Access, model: A
           // (encrypted_content + rs_... id) land in the matching _vnd namespace and never leak
           // across providers (different keys + different server-side state).
           chatGenerateParse: streaming
-            ? createOpenAIResponsesEventParser(responsesVendor)
-            : createOpenAIResponseParserNS(responsesVendor),
+            ? createOpenAIResponsesEventParser(responsesVendor, deployment, model.id)
+            : createOpenAIResponseParserNS(responsesVendor, deployment, model.id),
         };
       }
 

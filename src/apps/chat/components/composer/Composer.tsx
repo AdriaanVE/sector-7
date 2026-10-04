@@ -371,7 +371,7 @@ export function Composer(props: {
         ...(pendingParts || []).map(part => createHostedResourceContentFragment(part.resource)),
         ...attachmentDrafts.flatMap(draft => draft.outputFragments)]);
       if (selectedSkills.length) draft.metadata = { selectedSkills };
-      try { assembleRequest(targetConversationId, pendingChat.chatConfig.llmId, [...pendingChat.messages, draft]); }
+      try { await assembleRequest(targetConversationId, pendingChat.chatConfig.llmId, [...pendingChat.messages, draft]); }
       catch (error) { addSnackbar({ key: 'context-limit', message: error instanceof Error ? error.message : 'Context could not be estimated.', type: 'issue' }); return false; }
     }
 
@@ -537,10 +537,10 @@ export function Composer(props: {
   const onActileCommandPaste = React.useCallback(({ label, key }: ActileItem, searchPrefix: string) => {
     if (key.startsWith('skill:')) {
       const isCurrent = skillSelectionScope.begin(key.slice(6));
-      void localJSON('skills', { method: 'POST', body: JSON.stringify({ id: key.slice(6) }) }).then(({ skill }) => {
+      void localJSON('skills', { method: 'POST', body: JSON.stringify({ id: key.slice(6), conversationId: targetConversationId ?? undefined }) }).then(({ skill }) => {
         if (!isCurrent()) return;
         const snapshot = skillSnapshotSchema.parse(skill);
-        void localJSON(`skills?origin=${skillOriginForModel(skillModel)}`).then(({ skills }) => { if (!isCurrent()) return; const entry = skills.find((item: { id: string }) => item.id === snapshot.id); setSkillReferences(prior => ({ ...prior, [snapshot.id]: entry?.references ?? [] })); }).catch(error => { if (isCurrent()) addSnackbar({ key: 'skill-reference-catalog', message: error.message, type: 'issue' }); });
+        void localJSON(`skills?origin=${skillOriginForModel(skillModel)}${targetConversationId ? `&conversationId=${encodeURIComponent(targetConversationId)}` : ''}`).then(({ skills }) => { if (!isCurrent()) return; const entry = skills.find((item: { id: string }) => item.id === snapshot.id); setSkillReferences(prior => ({ ...prior, [snapshot.id]: entry?.references ?? [] })); }).catch(error => { if (isCurrent()) addSnackbar({ key: 'skill-reference-catalog', message: error.message, type: 'issue' }); });
         setSelectedSkills(prior => [...prior.filter(item => item.id !== snapshot.id), snapshot]);
         setComposeText(previous => previous.replace(/\/[^\s]*$/, ''));
       }).catch(error => { if (isCurrent()) addSnackbar({ key: 'skill-load', message: error.message, type: 'issue' }); });
@@ -561,7 +561,7 @@ export function Composer(props: {
       const newCursorPos = commandStart + label.length + 1;
       setTimeout(() => composerTextAreaRef.current?.setSelectionRange(newCursorPos, newCursorPos), 0);
     }
-  }, [composerTextAreaRef, setComposeText, skillSelectionScope, skillModel]);
+  }, [composerTextAreaRef, setComposeText, skillSelectionScope, skillModel, targetConversationId]);
 
   const onActileEmbedMessage = React.useCallback(async ({ conversationId, messageId }: StarredMessageItem) => {
     // get the message
@@ -581,9 +581,9 @@ export function Composer(props: {
 
   const actileProviders = React.useMemo(() => [
     providerAttachmentLabels(conversationOverlayStore, onActileCommandPaste),
-    providerCommands(onActileCommandPaste, skillModel),
+    providerCommands(onActileCommandPaste, skillModel, targetConversationId),
     providerStarredMessages(onActileEmbedMessage),
-  ], [conversationOverlayStore, onActileCommandPaste, onActileEmbedMessage, skillModel]);
+  ], [conversationOverlayStore, onActileCommandPaste, onActileEmbedMessage, skillModel, targetConversationId]);
 
   const { actileComponent, actileInterceptKeydown, actileInterceptTextChange } = useActileManager(actileProviders, composerTextAreaRef, targetConversationId);
 
@@ -790,7 +790,7 @@ export function Composer(props: {
                       <Button size='sm' variant='soft' onClick={() => { skillSelectionScope.remove(skill.id); setSelectedSkills(prior => prior.filter(item => item.id !== skill.id)); }}>{skill.name} ({skill.origin}) - remove</Button>
                       {(skillReferences[skill.id] ?? []).filter(path => !skill.resources.some(resource => resource.path === path)).map(path => <Button key={path} size='sm' variant='plain' onClick={() => {
                         const isCurrent = skillSelectionScope.begin(skill.id);
-                        void localJSON('skills', { method: 'POST', body: JSON.stringify({ id: skill.id, resources: [...skill.resources.map(resource => resource.path), path] }) }).then(({ skill: loaded }) => {
+                        void localJSON('skills', { method: 'POST', body: JSON.stringify({ id: skill.id, conversationId: targetConversationId ?? undefined, resources: [...skill.resources.map(resource => resource.path), path] }) }).then(({ skill: loaded }) => {
                           if (!isCurrent()) return;
                           const current = skillSnapshotSchema.parse(loaded);
                           if (current.revision !== skill.revision) throw new Error('Skill changed. Remove it and select it again.');

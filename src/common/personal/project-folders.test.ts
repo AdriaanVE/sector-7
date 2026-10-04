@@ -32,11 +32,11 @@ test('folder preflight rejects all over-limit or invalid selections with no part
   assert.deepEqual(useProjectFilesStore.getState().files, {}); assert.deepEqual(useFolderStore.getState().folders[0].fileIds, []);
 });
 
-test('legacy snapshots remain in disk and historical ownership but are not automatically sent in new requests', () => {
+test('legacy snapshots remain in disk and historical ownership but are not automatically sent in new requests', async () => {
   pauseDiskWrites(true); const files = { a: file('a', 'Repo/a/same.txt'), b: file('b', 'Repo/b/same.txt') };
   useFolderStore.setState({ folders: [project] }); useProjectFilesStore.setState({ files });
   useModelsStore.setState({ llms: [{ id: 'claude-opus-5-5', label: 'Opus', created: 0, description: '', hidden: false, contextTokens: 100000, maxOutputTokens: 8192, interfaces: [], parameterSpecs: [], initialParameters: {}, sId: 'test', vId: 'anthropic' }] });
-  const assembled = assembleRequest('chat', 'claude-opus-5-5', [createDMessageTextContent('user', 'task')]);
+  const assembled = await assembleRequest('chat', 'claude-opus-5-5', [createDMessageTextContent('user', 'task')]);
   assert.doesNotMatch(JSON.stringify(assembled.messages), /Repo\/a\/same.txt/); assert.doesNotMatch(JSON.stringify(assembled.messages), /Repo\/b\/same.txt/);
   const workspace = emptyWorkspace(); workspace.stores['app-project-files'] = { version: 1, state: { files } };
   const saved = validateWorkspace(JSON.parse(JSON.stringify(workspace))).stores['app-project-files']!.state.files as Record<string, ProjectFile>;

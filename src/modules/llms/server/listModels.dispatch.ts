@@ -1,4 +1,4 @@
-import { CHAT_MODELS } from '~/common/personal/chat-config';
+import { CLAUDE_CHAT_MODELS } from '~/common/personal/chat-config';
 
 import { TRPCError } from '@trpc/server';
 
@@ -87,7 +87,7 @@ function createListModelsDispatch<T>(dispatch: ListModelsDispatch<T>): ListModel
 export async function listModelsRunDispatch(access: AixAPI_Access, signal?: AbortSignal): Promise<ModelDescriptionSchema[]> {
   if (access.dialect === 'anthropic') {
     anthropicAccess(access, ANTHROPIC_API_PATHS.models);
-    return CHAT_MODELS.map(id => {
+    return CLAUDE_CHAT_MODELS.map(id => {
       const model = hardcodedAnthropicModels.find(model => model.id === id);
       if (!model) throw new Error(`Missing local model definition: ${id}`);
       return llmsWireCompatCacheTag(llmsAutoImplyInterfaces({
@@ -96,6 +96,10 @@ export async function listModelsRunDispatch(access: AixAPI_Access, signal?: Abor
           .map(spec => spec.paramId === 'llmVndAntThinkingBudget' ? { ...spec, hidden: true } : spec),
       }));
     });
+  }
+  if (access.dialect === 'openai') {
+    openAIAccess(access, 'gpt-6.1-sol', OPENAI_API_PATHS.responses);
+    return [llmsWireCompatCacheTag(llmsAutoImplyInterfaces(openAIModelToModelDescription('gpt-6.1-sol')))];
   }
   const dispatch = _listModelsCreateDispatch(access, signal);
   const wireModels = await dispatch.fetchModels();

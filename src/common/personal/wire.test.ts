@@ -73,7 +73,7 @@ for (const modelId of ['claude-opus-5-5', 'claude-sonnet-5-5'] as const) test(`$
   useProjectFilesStore.setState({ files: { 'historical-file': { id: 'historical-file', assetId: 'historical-asset', version: 'old', name: 'old.txt', mime: 'text/plain', size: 10, status: 'ready', warnings: [], tokenEstimates: {}, fragments: [createDocAttachmentFragment('old.txt', 'Historical snapshot', 'text/plain', createDMessageDataInlineText('DO NOT BULK INJECT HISTORICAL FILE', 'text/plain'), 'old-source', 1)] } } });
 
   const original = structuredClone(chat.messages);
-  const assembled = assembleRequest(chat.id, modelId, chat.messages);
+  const assembled = await assembleRequest(chat.id, modelId, chat.messages);
   const request = { systemMessage: await aixCGR_SystemMessage_FromDMessageOrThrow(assembled.system), chatSequence: await aixCGR_ChatSequence_FromDMessagesOrThrow(assembled.messages), tools: assembled.tools, toolsPolicy: { type: 'auto' as const } };
   const model = aixCreateModelFromLLMOptions([LLM_IF_OAI_Reasoning, LLM_IF_HOTFIX_NoTemperature], chatParameters(chat.chatConfig), undefined, modelId);
   const wire = aixToAnthropicMessageCreate('anthropic', model, request, true, { ...aixAnthropicHostedFeatures(model, request), nativeDeployment: 'wire-test' });
@@ -130,7 +130,7 @@ test('a chat outside projects exposes default skill folders and terminal tools o
   useChatStore.setState({ conversations: [chat] });
   useFolderStore.setState({ folders: [] });
   useModelsStore.setState({ llms: [{ id: 'claude-opus-5-5', label: 'Opus', created: 0, description: '', hidden: false, contextTokens: 100000, maxOutputTokens: 8192, interfaces: [], parameterSpecs: [], initialParameters: {}, sId: 'test', vId: 'anthropic' }] });
-  const assembled = assembleRequest(chat.id, 'claude-opus-5-5', [createDMessageTextContent('user', 'Install a skill for Claude and Codex')]);
+  const assembled = await assembleRequest(chat.id, 'claude-opus-5-5', [createDMessageTextContent('user', 'Install a skill for Claude and Codex')]);
   const request = { systemMessage: await aixCGR_SystemMessage_FromDMessageOrThrow(assembled.system), chatSequence: await aixCGR_ChatSequence_FromDMessagesOrThrow(assembled.messages), tools: assembled.tools, toolsPolicy: { type: 'auto' as const } };
   const model = modelFor();
   const wire = aixToAnthropicMessageCreate('anthropic', model, request, true, aixAnthropicHostedFeatures(model, request));
