@@ -128,6 +128,11 @@ test('repeated calls without new results pause once and return an incomplete sum
   f.disk.pauseDiskWrites(true); f.chats.useChatStore.setState({ conversations: [] });
   f.disk.installWorkspace(saved); await f.chats.useChatStore.persist.rehydrate(); f.disk.pauseDiskWrites(false);
   assert.equal(f.chats.getConversation(child.id)!.lastOutcome, 'incomplete');
+  const { DataAtRestV1 } = await import('~/common/stores/chat/chats.converters');
+  const exported = DataAtRestV1.formatChatToJsonV1(f.chats.getConversation(child.id)!);
+  const restored = DataAtRestV1.recreateConversation(exported)!;
+  assert.equal(restored.lastOutcome, 'incomplete');
+  assert.equal(restored.incompleteReason, 'repeat-guard');
 });
 
 test('a configured round cap summarizes without tools and records one resumable pause', async t => {

@@ -350,12 +350,14 @@ export namespace DataAtRestV1 {
 
   /** Used by: ^, downloadSingleChat, ChatLinkExport.handleCreate */
   export function formatChatToJsonV1(ec: DConversation): RestChatJsonV1 {
+    const attention = normalizeQuestionHistory(ec);
     return {
       id: ec.id,
       messages: ec.messages,
       systemPurposeId: ec.systemPurposeId,
       chatConfig: ec.chatConfig,
-      ...normalizeQuestionHistory(ec),
+      ...attention,
+      incompleteReason: attention.lastOutcome === 'incomplete' ? ec.incompleteReason : undefined,
       userTitle: ec.userTitle,
       autoTitle: ec.autoTitle,
       created: ec.created,
