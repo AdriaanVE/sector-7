@@ -58,6 +58,7 @@ export type DMessageRole = 'user' | 'assistant' | 'system';
 // Message > Metadata
 
 export interface DMessageMetadata {
+  subagentContinuation?: { parentConversationId: string; invocationId: string };
   selectedSkills?: SkillSnapshot[];
   inReferenceTo?: DMetaReferenceItem[]; // text this was in reply to
   entangled?: DMessageEntangled; // entangled messages info

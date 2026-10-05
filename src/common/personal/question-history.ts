@@ -5,7 +5,7 @@ import { questionSchema, type Attention, type PendingQuestion } from './attentio
 const invocationSchema = z.object({ pt: z.literal('tool_invocation'), id: z.string().min(1), invocation: z.object({ type: z.literal('function_call'), name: z.string(), args: z.string() }) });
 const responseSchema = z.object({ pt: z.literal('tool_response'), id: z.string().min(1), error: z.union([z.boolean(), z.string()]), response: z.object({ type: z.literal('function_call'), name: z.string(), result: z.string() }) });
 const pendingSchema = questionSchema.and(z.object({ invocationId: z.string().min(1), messageId: z.string().min(1), model: z.string().min(1) }));
-const attentionSchema = z.object({ lastCompletedMessageId: z.string().optional().catch(undefined), lastSeenMessageId: z.string().optional().catch(undefined), lastOutcome: z.enum(['ok', 'error', 'stopped', 'interrupted']).optional().catch(undefined) });
+const attentionSchema = z.object({ lastCompletedMessageId: z.string().optional().catch(undefined), lastSeenMessageId: z.string().optional().catch(undefined), lastOutcome: z.enum(['ok', 'error', 'stopped', 'interrupted', 'incomplete']).optional().catch(undefined) });
 
 function parseJson(value: string): unknown {
   try { return JSON.parse(value); } catch { return undefined; }

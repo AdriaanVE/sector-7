@@ -123,7 +123,9 @@ Override the key lookup with `BIFROST_KEYCHAIN_ACCOUNT` and `BIFROST_KEYCHAIN_SE
 
 The desktop app creates `~/Library/Application Support/Sector 7/config.json` for its port, sleep preference, gateway endpoints and Keychain lookup names. It contains no API key. Environment overrides and the full configuration are documented in [configuration](docs/configuration.md) and [desktop setup](docs/electron-mac.md).
 
-Ask from any chat: "Run a GPT-6.1 Sol subagent to inspect this project and report its findings." The assistant can call `spawn_agent` with a self-contained task, model and effort. Child chats remain in the sidebar as `Subagent: ...`. Stop on the parent cancels its child. This version waits for each child to finish, shares project files, and disables nested delegation and direct user questions in children. Specify read-only work when appropriate and avoid overlapping edits.
+Ask from any chat: "Run a GPT-6.1 Sol subagent to inspect this project and report its findings." The assistant can call `spawn_agent` with a self-contained task, model and effort. Child chats remain in the sidebar as `Subagent: ...`. Parent chats use `continue_agent` with the returned conversation ID for unfinished work or follow-up tasks, retaining the child's history and completed tool results. Stop on the parent cancels its child. This version waits for each child to finish, shares project files, and disables nested delegation and direct user questions in children. Specify read-only work when appropriate and avoid overlapping edits.
+
+Chats and subagents have no fixed tool-count or total runtime limit. Three consecutive calls with identical arguments and returned content pause the run; changing polling results count as progress. A five-minute response inactivity timeout applies during model requests, not while executing tools or waiting for children. Pauses retain an incomplete status and one notice. See [execution settings](docs/configuration.md).
 
 ## Projects and file access
 

@@ -194,6 +194,7 @@ export namespace V3StoreDataToHead {
     if ('lastCompletedMessageId' in ic) cc.lastCompletedMessageId = ic.lastCompletedMessageId;
     if ('lastSeenMessageId' in ic) cc.lastSeenMessageId = ic.lastSeenMessageId;
     if ('lastOutcome' in ic) cc.lastOutcome = ic.lastOutcome;
+    if ('incompleteReason' in ic) cc.incompleteReason = ic.incompleteReason;
     if (id) cc.id = id;
     cc.messages = messages.map(_recreateMessage);
     if (userTitle) cc.userTitle = userTitle;
