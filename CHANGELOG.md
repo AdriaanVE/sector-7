@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prepare Desktop 0.1.2 with the token-estimate dropdown and the unreleased chat improvements below.
+
 - Move token usage and estimated input cost into the model dropdown so typing and replies do not shift the composer. Keep the last estimate visible while updating.
 
 - Let chats and subagents continue beyond the previous tool-count, round and total runtime limits. Paused runs retain an incomplete status, and parent chats can continue saved children.
