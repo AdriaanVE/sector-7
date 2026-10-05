@@ -50,11 +50,14 @@ export function ComposerChatConfigPicker(props: {
   const contextColor = estimate && !estimate.budget.fits ? 'danger'
     : estimate && estimate.budget.total >= estimate.budget.limit * 0.8 ? 'warning' : 'neutral';
   const estimatePending = !props.preview && !!props.chatLLM && !!conversation && props.mode === 'generate-content';
+  const estimateSummary = isDraw ? '' : estimate
+    ? `, estimated context ${estimate.budget.total.toLocaleString()} of ${estimate.budget.limit.toLocaleString()} tokens, input ${estimate.inputTokens.toLocaleString()} tokens, output and reserve ${(estimate.budget.total - estimate.inputTokens).toLocaleString()} tokens${inputCost !== undefined ? `, estimated input cost ${formatModelsCost(inputCost)}` : ''}${estimatePending ? ', updating estimate' : ''}`
+    : `, ${props.preview?.error || (estimatePending ? 'updating context estimate' : 'context estimate unavailable')}`;
 
   return (
     <Dropdown>
       <MenuButton ref={props.buttonRef} disabled={!conversation} size='sm' variant='plain' color='neutral'
-        aria-label={`Model and effort: ${label}, ${config.effort}${isDraw ? ', draw mode' : ''}`}
+        aria-label={`Model and effort: ${label}, ${config.effort}${isDraw ? ', draw mode' : ''}${estimateSummary}`}
         endDecorator={<KeyboardArrowDownIcon sx={{ fontSize: 16 }} />}
         sx={{ minWidth: 0, px: 0.75, gap: 0.5, whiteSpace: 'nowrap', fontSize: { xs: '0.75rem', sm: '0.875rem' },
           '&:focus-visible': { outline: '2px solid var(--joy-palette-focusVisible)', outlineOffset: 2 } }}>
