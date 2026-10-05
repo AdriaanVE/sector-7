@@ -1,6 +1,9 @@
 name: Build Mac app
 
 on:
+  push:
+    branches: [main]
+    paths: [desktop/package.json]
   workflow_dispatch:
 
 permissions:
@@ -11,9 +14,55 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Check desktop version change
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare desktop versions
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const current = JSON.parse(readFileSync('desktop/package.json', 'utf8')).version;
+          const parse = version => {
+            if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Desktop version must have three numeric components.');
+            return version.split('.').map(Number);
+          };
+          const next = parse(current);
+          let release = true;
+          if (process.env.EVENT_NAME === 'push') {
+            const before = process.env.PUSH_BASE;
+            if (!before || /^0+$/.test(before)) throw new Error('Cannot compare the previous main version.');
+            const previous = JSON.parse(execFileSync('git', ['show', `${before}:desktop/package.json`], { encoding: 'utf8' })).version;
+            const old = parse(previous);
+            release = current !== previous;
+            if (release) {
+              const changed = next.findIndex((value, index) => value !== old[index]);
+              if (changed < 0 || next[changed] < old[changed]) throw new Error('Desktop version must increase before publishing.');
+            }
+            console.log(`Desktop version: ${previous} -> ${current}; release: ${release}`);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `release=${release}\n`);
+          NODE
+
   preflight:
     name: Check release prerequisites
-    if: github.ref == 'refs/heads/main'
+    needs: version
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 5

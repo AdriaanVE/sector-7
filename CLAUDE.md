@@ -21,8 +21,10 @@ Guidance to Claude Code when working with code in this repository.
 - Before committing or pushing, run `npm run precommit` with the Node major matching the
   installed native dependencies. Verify both desktop package files agree and run
   `npm run desktop:check` for desktop changes.
-- Keep release notes under `Unreleased` until publication. Building or publishing the app,
-  creating release tags and updating the Homebrew tap require an explicit release request.
+- Keep release notes under `Unreleased` until publication. A desktop version bump merged to
+  `main` automatically runs the Mac build, publishes its versioned release and updates the
+  Homebrew tap. Treat the bump as release intent. Manual workflow dispatch remains available
+  for retries; published versions cannot be reused.
 - Report the changelog entry, new desktop version, checks and publication status when done.
 
 ## Architecture Overview
