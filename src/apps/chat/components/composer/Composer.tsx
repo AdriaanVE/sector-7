@@ -28,7 +28,6 @@ import { useBrowseCapability } from '~/modules/browse/store-module-browsing';
 
 import type { DComposerPendingPart } from '~/common/chat-overlay/store-perchat-composer_slice';
 import { DLLM, getLLMLabel, LLM_IF_OAI_Vision } from '~/common/stores/llms/llms.types';
-import { llmChatPricing_adjusted } from '~/common/stores/llms/llms.pricing';
 import { AudioGenerator } from '~/common/util/audio/AudioGenerator';
 import { AudioPlayer } from '~/common/util/audio/AudioPlayer';
 import { openFileForAttaching } from '~/common/components/ButtonAttachFiles';
@@ -83,7 +82,6 @@ import { ComposerTextAreaDrawActions } from './textarea/ComposerTextAreaDrawActi
 import { StatusBarMemo } from '../StatusBar';
 import { ComposerRim } from './ComposerRim';
 import { ComposerChatConfigPicker } from './ComposerChatConfigPicker';
-import { ComposerStatusLine } from './tokens/ComposerStatusLine';
 import { useComposerDragDrop } from './useComposerDragDrop';
 import { useRequestTokenPreview } from './tokens/useRequestTokenPreview';
 
@@ -278,10 +276,6 @@ export function Composer(props: {
     attachmentDrafts, selectedSkills, pendingParts, budgetProjects, budgetFiles, personalInstructions,
   }), [budgetChat, props.chatLLM, chatExecuteMode, composeText, attachmentDrafts, selectedSkills, pendingParts, budgetProjects, budgetFiles, personalInstructions]);
   const preview = useRequestTokenPreview(previewInput);
-  const tokensComposer = preview && 'inputTokens' in preview ? preview.inputTokens : 0;
-  const tokensResponseMax = preview && 'budget' in preview ? preview.budget.total - preview.inputTokens : 0;
-  const tokenLimit = preview && 'budget' in preview ? preview.budget.limit : 0;
-  const tokenChatPricing = React.useMemo(() => llmChatPricing_adjusted(props.chatLLM), [props.chatLLM]);
 
 
   // Effect: load initial text if queued up (e.g. by /link/share_targetF)
@@ -931,7 +925,8 @@ export function Composer(props: {
             {isDraw && <ButtonGroupDrawRepeat drawRepeat={drawRepeat} setDrawRepeat={setDrawRepeat} />}
             <Box sx={{ flex: 1 }} />
             <ComposerChatConfigPicker conversationId={targetConversationId} buttonRef={props.configButtonRef}
-              mode={chatExecuteMode} onSetMode={setChatExecuteMode} capabilityHasT2I={props.capabilityHasT2I} disabled={sendStarted || assistantBusy} />
+              mode={chatExecuteMode} onSetMode={setChatExecuteMode} capabilityHasT2I={props.capabilityHasT2I} disabled={sendStarted || assistantBusy}
+              preview={preview} chatLLM={props.chatLLM} />
             {!assistantAbortible
               ? <IconButton aria-label={chatRunActive ? 'Stopping response' : sendButtonLabel} variant='solid' color={sendButtonColor} sx={{
                 borderRadius: '50%', '--IconButton-size': { xs: '40px', sm: '36px' },
@@ -940,9 +935,6 @@ export function Composer(props: {
               }} disabled={noConversation || sendStarted || chatRunActive} onClick={handleSendClicked}>{sendButtonIcon}</IconButton>
               : <IconButton aria-label='Stop response' variant='solid' color='neutral' sx={stopButtonSx} disabled={noConversation} onClick={handleStopClicked}><StopRoundedIcon sx={{ fontSize: 22 }} /></IconButton>}
           </Box>
-
-          {!isDraw && props.chatLLM && <ComposerStatusLine direct={tokensComposer} responseMax={tokensResponseMax} limit={tokenLimit}
-            chatPricing={tokenChatPricing} pending={!preview && !!budgetChat && chatExecuteMode === 'generate-content'} compact={isMobile} />}
 
           {/* overlay: Drag & Drop*/}
           {dropComponent}
