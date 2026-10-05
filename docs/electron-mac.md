@@ -22,19 +22,21 @@ Build output:
 
 After this workflow reaches `main`, open GitHub Actions > Build Mac app > Run workflow and choose `main`. The separate manual workflow runs the quality gate and desktop checks, builds the Apple silicon app/DMG, and uploads them for 14 days. The app is zipped with `ditto` to preserve its bundle permissions. It uses the same ad-hoc signing as local builds. Other branches are skipped. Hosted execution must be verified after the workflow is available on `main`.
 
-Every successful manual build publishes a release and opens the Homebrew cask update PR. Configure the GitHub `release` environment with deployment branches restricted to `main`, and store `SECTOR7_RELEASE_TOKEN` there as a fine-grained token scoped to this repository with Contents and Pull requests write permissions; this allows the cask PR to trigger required CI. The action publishes a `desktop-v<version>` release that the workflow refuses to republish and opens a PR updating `Casks/sector-7.rb` with its app ZIP checksum. It never merges the cask PR. Run `npm version patch --prefix desktop --no-git-tag-version` for each subsequent release and commit both desktop package files. If asset upload fails and leaves an unpublished draft, delete that draft before retrying. If release publication succeeds and a `chore/homebrew-*` branch was pushed, open its PR manually. Otherwise, if a cask PR fails after release publication, generate it manually with `node desktop/scripts/homebrew-cask.mjs <downloaded-app.zip>` and submit the resulting cask; do not replace published assets.
+Every successful manual build publishes a `desktop-v<version>` release and automatically updates `Casks/sector-7.rb` on the `main` branch of `AdriaanVE/homebrew-tap`. The app repository stays protected; there is no cask PR. Configure the `release` environment for `main` only. Use separate fine-grained tokens: `SECTOR7_RELEASE_TOKEN` with Contents write permission for `AdriaanVE/sector-7`, and `SECTOR7_HOMEBREW_TOKEN` with Contents write permission only for `AdriaanVE/homebrew-tap`. No Pull requests permission is needed. The tap must already contain its initial cask; preflight checks that and repository access before the build.
 
-After the first cask PR reaches main, install and update with:
+Run `npm version patch --prefix desktop --no-git-tag-version` for each subsequent release and commit both desktop package files. Existing releases cannot be republished. If publishing fails before a release is complete, inspect any draft before retrying. If only the separate Homebrew job fails after publication, rerun failed jobs; the completed release job is reused. The tap update uses the current file SHA to reject concurrent changes and skips identical content. Do not replace published assets. For manual recovery, `node desktop/scripts/homebrew-cask.mjs <downloaded-app.zip> <output.rb>` generates the cask without changing the app checkout.
+
+Install and update through the dedicated tap:
 
 ```sh
-brew tap AdriaanVE/sector-7 https://github.com/AdriaanVE/sector-7
-brew install --cask sector-7
+brew tap AdriaanVE/tap
+brew install --cask adriaanve/tap/sector-7
 # Quit Sector 7 before updating:
 brew update
 brew upgrade --cask sector-7
 ```
 
-The cask supports Apple silicon on macOS 13 or later. Homebrew installs into Applications and leaves user data intact on uninstall. Upgrades may prompt again for folder, microphone or Keychain permissions because builds use ad-hoc signing. Downloaded apps may need macOS approval because they are ad-hoc signed. The hosted release/cask path still needs its first live verification.
+The cask supports Apple silicon on macOS 13 or later. Homebrew installs into Applications and leaves user data intact on uninstall. Upgrades may prompt again for folder, microphone or Keychain permissions because builds use ad-hoc signing. Downloaded apps may need macOS approval because they are ad-hoc signed. The dedicated-tap publisher still needs its first hosted run. Existing installs from `adriaanve/sector-7` follow the `tap_migrations.json` mapping when the old tap updates.
 
 Builds preserve their staged server under `desktop/.stage-*`. To run the unpackaged Electron source, set `SECTOR7_DESKTOP_STAGE` to one of those absolute staging-directory paths before `npm start --prefix desktop`. Packaged apps use their bundled server and need no stage setting.
 

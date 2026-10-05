@@ -12,9 +12,9 @@ if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('Inv
 if (!process.argv[2]) throw new Error('Pass the built app ZIP path.');
 const hash = createHash('sha256');
 for await (const chunk of createReadStream(resolve(process.argv[2]))) hash.update(chunk);
-const directory = join(root, 'Casks');
-await mkdir(directory, { recursive: true });
-await writeFile(join(directory, 'sector-7.rb'), `cask "sector-7" do
+const output = resolve(process.argv[3] || join(root, 'Casks', 'sector-7.rb'));
+await mkdir(dirname(output), { recursive: true });
+await writeFile(output, `cask "sector-7" do
   version "${version}"
   sha256 "${hash.digest('hex')}"
 
@@ -24,7 +24,7 @@ await writeFile(join(directory, 'sector-7.rb'), `cask "sector-7" do
   homepage "https://github.com/${repository}"
 
   depends_on arch: :arm64
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "Sector 7.app"
   uninstall quit: "com.adriaanve.sector7"
