@@ -5,7 +5,7 @@ import { join, relative, isAbsolute } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { SkillSnapshot } from '~/common/personal/skills';
 import { WorkspaceError, loadWorkspace } from './workspace';
-import { connectedFolderSchema } from '~/common/personal/folder-tools';
+import { connectedFolderSchema, type ConnectedFolder } from '~/common/personal/folder-tools';
 import { checkedFolderPath, textHandle } from './folders';
 
 export type { SkillSnapshot } from '~/common/personal/skills';
@@ -57,6 +57,16 @@ export async function skillSnapshot(id: string, resources: string[] = [], roots 
   return { id: entry.id, origin: entry.origin, name: entry.name, revision: entry.revision, instructions: entry.instructions, resources: loaded };
 }
 
+async function projectInstruction(folder: ConnectedFolder, path: string) {
+  // Repository instruction files commonly link to one shared file. Validate the resolved target with the normal folder checks.
+  const resolved = await realpath(join(folder.path, path));
+  const within = relative(folder.path, resolved);
+  if (within === '..' || within.startsWith('../') || isAbsolute(within)) throw new WorkspaceError('Project instructions leave the connected folder.', 403);
+  if ((await stat(await checkedFolderPath(folder, within))).size > MAX_BYTES) throw new WorkspaceError('Project instructions exceed 256 KB.', 413);
+  const file = await textHandle(folder, within);
+  try { return file.text; } finally { await file.handle.close(); }
+}
+
 /** Project roots come from saved membership and opt-ins, never from a client-supplied path. */
 export async function projectSkillContext(conversationId?: string, origin?: string) {
   const roots: SkillRoot[] = [...defaultRoots]; const instructions: string[] = [];
@@ -74,13 +84,14 @@ export async function projectSkillContext(conversationId?: string, origin?: stri
         try {
           const path = await checkedFolderPath(folder, subdir);
           roots.push({ origin: agent, path: join(path, 'skills'), scope: 'project', idPrefix: `project/${project.id}/${folder.id}/${agent}` });
-          const instructionPath = `${subdir}/${agent === 'codex' ? 'AGENTS.md' : 'CLAUDE.md'}`;
-          try {
-            if ((await stat(await checkedFolderPath(folder, instructionPath))).size > MAX_BYTES) throw new WorkspaceError('Project instructions exceed 256 KB.', 413);
-            const file = await textHandle(folder, instructionPath);
-            try { instructions.push(file.text); } finally { await file.handle.close(); }
-          } catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
         } catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+        const filename = agent === 'codex' ? 'AGENTS.md' : 'CLAUDE.md';
+        for (const instructionPath of [filename, `${subdir}/${filename}`]) {
+          try {
+            const instruction = await projectInstruction(folder, instructionPath);
+            if (instruction.trim()) instructions.push(instruction);
+          } catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+        }
       }
     }
   }

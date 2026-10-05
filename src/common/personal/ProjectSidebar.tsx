@@ -214,7 +214,7 @@ function ProjectEditor({ project, files, onClose, onRemove, onSaved }: {
           </Box>)}
           <Button size='sm' variant='plain' color='neutral' loading={loading} disabled={loading} startDecorator={<AddIcon />} onClick={() => void addFolder()} sx={{ width: '100%', minHeight: 48, justifyContent: 'flex-start', borderRadius: 0, p: 1.5, bgcolor: 'rgba(180, 198, 209, .06)' }}>Add folder</Button>
         </Box>
-        <Typography level='body-xs' sx={{ color: 'text.secondary' }}>Files stay on your Mac and are read on demand. Save adds these folders to the project’s file tools. Enable detected .codex or .claude folders to use their project instructions and skills. Every chat also has ~/.claude, ~/.codex and local commands with the app’s permissions. Disconnecting removes this file connection.</Typography>
+        <Typography level='body-xs' sx={{ color: 'text.secondary' }}>Files stay on your Mac and are read on demand. Save adds these folders to the project’s file tools. Use .codex loads AGENTS.md; Use .claude loads CLAUDE.md. Matching root instructions load first, then instructions and skills from the agent folder when present. Every chat also has ~/.claude, ~/.codex and local commands with the app’s permissions. Disconnecting removes this file connection.</Typography>
       </Box>
       <Box component='details' sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 'md', p: 1.5 }}>
         <Box component='summary' sx={{ cursor: 'pointer', fontSize: 'sm', fontWeight: 600 }}>Shared instructions</Box>

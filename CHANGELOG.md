@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Project settings load repository-root `AGENTS.md` or `CLAUDE.md` when the matching agent checkbox is enabled and saved, followed by instructions in its agent folder. Projects with only a root instruction file can enable the matching checkbox.
+
 - Move token usage and estimated input cost into the model dropdown so typing and replies do not shift the composer. Keep the last estimate visible while updating.
 
 - Let chats and subagents continue beyond the previous tool-count, round and total runtime limits. Paused runs retain an incomplete status, and parent chats can continue saved children.
