@@ -49,6 +49,7 @@ export function ComposerChatConfigPicker(props: {
   const inputCost = estimate && pricing ? getLlmCostForTokens(estimate.inputTokens, estimate.inputTokens, pricing.input) : undefined;
   const contextColor = estimate && !estimate.budget.fits ? 'danger'
     : estimate && estimate.budget.total >= estimate.budget.limit * 0.8 ? 'warning' : 'neutral';
+  const estimatePending = !props.preview && !!props.chatLLM && !!conversation && props.mode === 'generate-content';
 
   return (
     <Dropdown>
@@ -70,7 +71,8 @@ export function ComposerChatConfigPicker(props: {
               {estimate ? `${estimate.budget.total.toLocaleString()} / ${estimate.budget.limit.toLocaleString()} tokens` : 'Estimate unavailable'}
             </Typography>
             <Typography level='body-xs' sx={{ color: 'text.tertiary', minHeight: '3em' }}>
-              {props.preview?.error || (!props.preview ? 'Updating estimate...' : 'Includes output and thinking reserve.')}
+              {props.preview?.error || (estimatePending ? 'Updating estimate...'
+                : estimate ? 'Includes output and thinking reserve.' : 'Select an available chat model to estimate context.')}
             </Typography>
             <Typography level='body-xs'>Input: {estimate ? estimate.inputTokens.toLocaleString() : '...'}</Typography>
             <Typography level='body-xs'>Output &amp; reserve: {estimate ? (estimate.budget.total - estimate.inputTokens).toLocaleString() : '...'}</Typography>
