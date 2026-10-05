@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move token usage and estimated input cost into the model dropdown so typing and replies do not shift the composer. Keep the last estimate visible while updating.
+
 - Let chats and subagents continue beyond the previous tool-count, round and total runtime limits. Paused runs retain an incomplete status, and parent chats can continue saved children.
 
 - Publish the Homebrew cask directly to `AdriaanVE/homebrew-tap` after a successful desktop release, without a cask PR. Existing installs migrate through Homebrew tap metadata.
