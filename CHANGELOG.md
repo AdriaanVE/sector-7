@@ -3,10 +3,13 @@
 ## Unreleased
 
 - Publish the Homebrew cask directly to `AdriaanVE/homebrew-tap` after a successful desktop release, without a cask PR. Existing installs migrate through Homebrew tap metadata.
+- Fixed the Homebrew macOS dependency warning in the cask and release generator. The minimum remains macOS Ventura.
 
 ## Desktop 0.1.1
 
 - Fixed the extra `exec` Dock icon by running the local backend through Electron's background helper. Sector 7 now has one entry in the Dock and app switcher.
+
+[Desktop 0.1.1 release](https://github.com/AdriaanVE/sector-7/releases/tag/desktop-v0.1.1).
 
 ## Desktop 0.1.0
 
