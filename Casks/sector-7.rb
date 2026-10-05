@@ -1,6 +1,6 @@
 cask "sector-7" do
-  version "0.1.0"
-  sha256 "b6df72b135bdf296d19e787e9f755e023386e9a81fb077e595e685221b1e8608"
+  version "0.1.1"
+  sha256 "1613ff4aa8e8247455c0dbca3d13b7049cbbdf2a23ff8287dddd707aed1752e8"
 
   url "https://github.com/AdriaanVE/sector-7/releases/download/desktop-v#{version}/Sector-7-arm64.app.zip"
   name "Sector 7"
