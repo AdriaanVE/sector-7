@@ -1,6 +1,10 @@
 # Sector 7 changelog
 
-## Desktop 0.1.1 (unreleased)
+## Unreleased
+
+- Publish the Homebrew cask directly to `AdriaanVE/homebrew-tap` after a successful desktop release, without a cask PR. Existing installs migrate through Homebrew tap metadata.
+
+## Desktop 0.1.1
 
 - Fixed the extra `exec` Dock icon by running the local backend through Electron's background helper. Sector 7 now has one entry in the Dock and app switcher.
 

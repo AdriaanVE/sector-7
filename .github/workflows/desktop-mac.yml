@@ -27,7 +27,7 @@ jobs:
           GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
         run: |
           if test -z "$GH_TOKEN"; then
-            echo 'Set SECTOR7_RELEASE_TOKEN in the main-only release environment with Contents and Pull requests write permissions.' >&2
+            echo 'Set SECTOR7_RELEASE_TOKEN in the main-only release environment with Contents write permission for this repository.' >&2
             exit 1
           fi
           gh api user --silent
@@ -36,6 +36,17 @@ jobs:
             echo 'This desktop version already has a release. Bump the desktop package version, or remove an unpublished failed draft before retrying.' >&2
             exit 1
           fi
+
+      - name: Check Homebrew publishing credential
+        env:
+          GH_TOKEN: ${{ secrets.SECTOR7_HOMEBREW_TOKEN }}
+        run: |
+          if test -z "$GH_TOKEN"; then
+            echo 'Set SECTOR7_HOMEBREW_TOKEN in the release environment with Contents write permission for AdriaanVE/homebrew-tap.' >&2
+            exit 1
+          fi
+          gh api repos/AdriaanVE/homebrew-tap --jq '.permissions.push' | grep -qx true
+          gh api repos/AdriaanVE/homebrew-tap/contents/Casks/sector-7.rb --silent
 
   build:
     name: Apple silicon app and DMG
@@ -83,7 +94,7 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Publish release and Homebrew update
+    name: Publish release
     needs: build
     runs-on: ubuntu-latest
     environment: release
@@ -103,9 +114,6 @@ jobs:
           name: Sector-7-mac-arm64-${{ github.sha }}
           path: desktop/out
 
-      - name: Prepare cask checksum
-        run: node desktop/scripts/homebrew-cask.mjs desktop/out/Sector-7-arm64.app.zip
-
       - name: Publish versioned release
         env:
           GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
@@ -121,18 +129,53 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Sector 7 Desktop $version" \
             --notes-file docs/homebrew-release-notes.md --latest=false
 
-      - name: Open cask update PR
+  homebrew:
+    name: Publish Homebrew cask
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Sector-7-mac-arm64-${{ github.sha }}
+          path: desktop/out
+
+      - name: Prepare cask checksum
+        run: node desktop/scripts/homebrew-cask.mjs desktop/out/Sector-7-arm64.app.zip "$RUNNER_TEMP/sector-7.rb"
+
+      - name: Update dedicated tap
         env:
-          GH_TOKEN: ${{ secrets.SECTOR7_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.SECTOR7_HOMEBREW_TOKEN }}
         run: |
           version=$(node -p "require('./desktop/package.json').version")
-          branch="chore/homebrew-${version}-${GITHUB_RUN_ID}"
-          git switch -c "$branch"
-          git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
-          git add -- Casks/sector-7.rb
-          git commit -m "Desktop: update Homebrew cask to $version"
-          gh auth setup-git
-          git push origin "$branch"
-          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" \
-            --title "Desktop: update Homebrew cask to $version" --body-file docs/homebrew-pr-body.md
+          endpoint='repos/AdriaanVE/homebrew-tap/contents/Casks/sector-7.rb'
+          gh api "$endpoint?ref=main" > "$RUNNER_TEMP/current-cask.json"
+          base64 --decode < <(jq -r .content "$RUNNER_TEMP/current-cask.json") > "$RUNNER_TEMP/current-cask.rb"
+          if cmp -s "$RUNNER_TEMP/current-cask.rb" "$RUNNER_TEMP/sector-7.rb"; then
+            echo 'The Homebrew cask is already current.'
+            exit 0
+          fi
+          current_version=$(sed -n 's/^  version "\([0-9.]*\)"$/\1/p' "$RUNNER_TEMP/current-cask.rb")
+          if test -z "$current_version"; then
+            echo 'Cannot determine the current Homebrew version.' >&2
+            exit 1
+          fi
+          if test "$(printf '%s\n' "$version" "$current_version" | sort -V | tail -1)" != "$version"; then
+            echo 'Refusing to replace a newer Homebrew cask with an older release.' >&2
+            exit 1
+          fi
+          jq -n --arg message "Desktop: update Sector 7 cask to $version" \
+            --arg sha "$(jq -r .sha "$RUNNER_TEMP/current-cask.json")" \
+            --arg content "$(base64 -w 0 "$RUNNER_TEMP/sector-7.rb")" \
+            '{message: $message, sha: $sha, content: $content, branch: "main"}' > "$RUNNER_TEMP/cask-update.json"
+          gh api --method PUT "$endpoint" --input "$RUNNER_TEMP/cask-update.json" --silent
