@@ -31,7 +31,7 @@ export function ChatBarChat(props: {
         <MenuItem onClick={() => conversation && downloadSingleChat(conversation, 'json')}>Export JSON</MenuItem>
         {projects.map(project => <MenuItem key={project.id} onClick={() => props.conversationId && useFolderStore.getState().addConversationToFolder(project.id, props.conversationId)}>Move to {project.title}</MenuItem>)}
         <MenuItem onClick={() => { if (props.conversationId) for (const project of projects) useFolderStore.getState().removeConversationFromFolder(project.id, props.conversationId); }}>Remove from project</MenuItem>
-        <MenuItem onClick={() => props.conversationId && useChatStore.getState()._editConversation(props.conversationId, { lastSeenMessageId: conversation?.lastCompletedMessageId, lastOutcome: 'ok' })}>Mark read</MenuItem>
+        <MenuItem onClick={() => props.conversationId && useChatStore.getState()._editConversation(props.conversationId, { lastSeenMessageId: conversation?.lastCompletedMessageId })}>Mark read</MenuItem>
         <MenuItem onClick={() => props.conversationId && useChatStore.getState().setArchived(props.conversationId, !conversation?.isArchived)}>{conversation?.isArchived ? 'Unarchive' : 'Archive'}</MenuItem>
         <MenuItem color='danger' onClick={() => props.conversationId && useChatStore.getState().deleteConversations([props.conversationId])}>Delete chat</MenuItem>
       </Menu>

@@ -4,3 +4,9 @@ export const SECTOR7_OPENAI_CONTEXT = {
   compactThreshold: 360000,
   experimentalCompaction: true,
 } as const;
+
+/** No total deadline; optional round caps reserve a final response with tools disabled. */
+export const SECTOR7_CHAT_EXECUTION: { maxToolRounds: number | null; responseIdleTimeoutMs: number } = {
+  maxToolRounds: null,
+  responseIdleTimeoutMs: 300000,
+};

@@ -67,7 +67,7 @@ export function toolActivityLabel(fragments: readonly Immutable<DMessageFragment
       continue;
     }
     const { name } = part.invocation;
-    const invocationPhase = name === 'spawn_agent' ? 'Running subagent' : name === 'local_command' ? 'Running command' : name === 'folder_list' ? 'Listing files' : name === 'folder_read' ? 'Reading files' : name === 'folder_search' || name === 'web_search' || name === 'web_fetch' ? 'Searching' : name.startsWith('folder_') ? 'Editing files' : undefined;
+    const invocationPhase = name === 'spawn_agent' || name === 'continue_agent' ? 'Running subagent' : name === 'local_command' ? 'Running command' : name === 'folder_list' ? 'Listing files' : name === 'folder_read' ? 'Reading files' : name === 'folder_search' || name === 'web_search' || name === 'web_fetch' ? 'Searching' : name.startsWith('folder_') ? 'Editing files' : undefined;
     if (invocationPhase !== phase) continue;
     let args: Record<string, unknown> = {};
     try {
@@ -80,6 +80,7 @@ export function toolActivityLabel(fragments: readonly Immutable<DMessageFragment
     const query = contextText(args.query, 256);
     switch (name) {
       case 'spawn_agent': return `Running ${contextText(args.model, 64) || 'GPT-6.1 Sol'} subagent${contextText(args.description, 120) ? `: ${contextText(args.description, 120)}` : ''}`;
+      case 'continue_agent': return 'Continuing subagent';
       case 'folder_list': return location ? `Listing ${location}` : 'Listing files';
       case 'folder_read': return location ? `Reading ${location}` : 'Reading files';
       case 'folder_move': {
@@ -158,7 +159,7 @@ function functionSummaryCategory(name: string): SummaryCategory {
     case 'folder_move': return 'move';
     case 'folder_delete': return 'delete';
     case 'local_command': return 'command';
-    case 'spawn_agent': return 'agent';
+    case 'spawn_agent': case 'continue_agent': return 'agent';
     case 'web_search': return 'web';
     case 'web_fetch': return 'fetch';
     case 'code_execution': return 'code';
@@ -190,6 +191,7 @@ function responseSummaryState(part: Immutable<DMessageToolResponsePart>): Summar
     result = jsonObject(JSON.parse(part.response.result)) ?? {};
   } catch { /* Other providers may return plain text. */ }
   if (result.stopped === true || result.status === 'cancelled' || result.status === 'interrupted') return 'stopped';
+  if (result.status === 'incomplete') return 'incomplete';
   if (part.error || result.error || ['failed', 'timed_out', 'output_limit'].includes(String(result.status))) return 'failed';
   if (part.response.type === 'function_call' && part.response.name === 'local_command' && result.status !== 'succeeded') return 'incomplete';
   return result.status === 'running' ? 'incomplete' : 'done';

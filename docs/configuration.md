@@ -37,6 +37,10 @@ Electron uses a native directory sheet attached to the app window through the pr
 
 Sector 7 owns its runtime settings in `src/common/personal/runtime-config.ts`; it does not load Codex's `config.toml`. Sol chats and subagents use a 400,000-token working limit and experimental server-side compaction at 360,000 tokens. The actual model capacity stays in the model definition. The working limit reserves output and reasoning space. Large single additions can still exceed the working limit before compaction can run.
 
+`SECTOR7_CHAT_EXECUTION` applies to parents and children. `maxToolRounds: null` disables the optional local-tool round cap. Set a nonnegative integer to limit rounds; the cap permits one final response with local and hosted tools disabled to summarize progress. `responseIdleTimeoutMs: 300000` pauses a model request after five minutes without AIX response activity, including heartbeat particles. It does not time local tools or child runs. Local commands retain their separate 60-second default and 300-second maximum.
+
+No fixed tool-count or total runtime cap applies. Three consecutive calls with identical arguments and returned content pause the run; receipt IDs and timestamps are excluded from the comparison. Changing polling results count as progress. Paused chats retain `incomplete` with a reason and remain inspectable after reload. Parent chats can call `continue_agent` on their existing children; replaying an already-saved continuation never reruns it automatically.
+
 Responses requests send `context_management` with `store: false`. The latest encrypted checkpoint and subsequent output items save with the assistant message. Future requests replay that checkpoint and newer messages. The full transcript remains available locally. Covered edits, changed instructions, model switches or connection/credential changes require the original history again. The retry preserves edited system instructions and selected skills. Compaction is model-managed and may lose detail. Bifrost compaction and checkpoint replay completed live on 2026-10-04.
 
 ## Project agent folders

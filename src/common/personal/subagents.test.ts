@@ -93,6 +93,208 @@ function sse(items: Record<string, unknown>[], model = 'gpt-6.1-sol') {
   return new Response(events.map((event, sequence_number) => `data: ${JSON.stringify({ ...event, sequence_number })}\n\n`).join(''), { headers: { 'Content-Type': 'text/event-stream' } });
 }
 
+test('a subagent completes more than 32 local calls over more than seven rounds', async t => {
+  const f = await fixture(t);
+  let round = 0;
+  f.setProvider(async () => {
+    if (round === 9) return sse([{ type: 'message', id: 'long-answer', role: 'assistant', content: [], status: 'completed' }]);
+    const current = round++;
+    return sse(Array.from({ length: 4 }, (_, index) => ({ type: 'function_call', id: `fc-${current}-${index}`, call_id: `read-${current}-${index}`, name: 'folder_read', arguments: JSON.stringify({ folder_id: 'repo', path: 'fact.txt', offset: current * 4 + index }), status: 'completed' })));
+  });
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.result, 'The project fact is October.');
+  const child = f.chats.getConversation(String(result.conversationId))!;
+  assert.equal(child.messages.flatMap(message => message.fragments).filter(fragment => fragment.ft === 'content' && fragment.part.pt === 'tool_response').length, 36);
+});
+
+test('repeated calls without new results pause once and return an incomplete summary to the parent', async t => {
+  const f = await fixture(t);
+  let reads = 0;
+  f.setProvider(async body => {
+    if (!body.tools?.length) return sse([{ type: 'message', id: 'paused-summary', role: 'assistant', content: [], status: 'completed' }]);
+    if (reads > 4) throw new Error('Repeated calls must stop before a sixth execution.');
+    return sse([{ type: 'function_call', id: `fc-repeat-${reads}`, call_id: `repeat-${reads++}`, name: 'folder_read', arguments: '{"folder_id":"repo","path":"fact.txt"}', status: 'completed' }]);
+  });
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.reason, 'repeat-guard');
+  assert.equal(result.resumable, true);
+  assert.equal(result.result, 'The project fact is October.');
+  assert.equal(reads, 3);
+  const child = f.chats.getConversation(String(result.conversationId))!;
+  assert.equal(child.lastOutcome, 'incomplete');
+  const saved = (await f.serverWorkspace.loadWorkspace(f.directory)).workspace!;
+  f.disk.pauseDiskWrites(true); f.chats.useChatStore.setState({ conversations: [] });
+  f.disk.installWorkspace(saved); await f.chats.useChatStore.persist.rehydrate(); f.disk.pauseDiskWrites(false);
+  assert.equal(f.chats.getConversation(child.id)!.lastOutcome, 'incomplete');
+  const { DataAtRestV1 } = await import('~/common/stores/chat/chats.converters');
+  const exported = DataAtRestV1.formatChatToJsonV1(f.chats.getConversation(child.id)!);
+  const restored = DataAtRestV1.recreateConversation(exported)!;
+  assert.equal(restored.lastOutcome, 'incomplete');
+  assert.equal(restored.incompleteReason, 'repeat-guard');
+});
+
+test('a configured round cap summarizes without tools and records one resumable pause', async t => {
+  const f = await fixture(t);
+  const { SECTOR7_CHAT_EXECUTION } = await import('./runtime-config');
+  const previous = SECTOR7_CHAT_EXECUTION.maxToolRounds;
+  SECTOR7_CHAT_EXECUTION.maxToolRounds = 1;
+  t.after(() => { SECTOR7_CHAT_EXECUTION.maxToolRounds = previous; });
+  let rounds = 0;
+  f.setProvider(async body => {
+    if (!body.tools?.length) {
+      assert.ok(!body.tools || body.tools.length === 0, 'Hosted search and code tools must also be disabled for the summary.');
+      return sse([{ type: 'message', id: 'cap-summary', role: 'assistant', content: [], status: 'completed' }]);
+    }
+    return sse(Array.from({ length: 3 }, (_, i) => ({ type: 'function_call', id: `fc-cap-${rounds}-${i}`, call_id: `cap-${rounds++}-${i}`, name: 'folder_read', arguments: JSON.stringify({ folder_id: 'repo', path: 'fact.txt', offset: i }), status: 'completed' })));
+  });
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.reason, 'round-limit');
+  const child = f.chats.getConversation(String(result.conversationId))!;
+  const { toolDisplayFragments } = await import('./tool-display');
+  const displayed = child.messages.flatMap(message => toolDisplayFragments(message.fragments, false));
+  assert.equal(displayed.filter(fragment => 'part' in fragment && fragment.part.pt === 'ph' && fragment.part.pType === 'notice').length, 1);
+  assert.equal(displayed.some(fragment => 'part' in fragment && fragment.part.pt === 'error'), false);
+});
+
+test('the parent continues the same saved child without repeating completed file writes', async t => {
+  const f = await fixture(t);
+  f.setProvider(async body => {
+    if (body.input.some((item: { type: string }) => item.type === 'function_call_output')) return sse([{ type: 'message', id: 'created-answer', role: 'assistant', content: [], status: 'completed' }]);
+    return sse([{ type: 'function_call', id: 'fc-write', call_id: 'saved-write', name: 'folder_write', arguments: '{"folder_id":"repo","path":"created.txt","text":"created once"}', status: 'completed' }]);
+  });
+  const initial = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  const continuation = { id: 'continue-child', name: 'continue_agent', args: JSON.stringify({ conversationId: initial.conversationId, message: 'Verify your earlier work and finish.' }) };
+  f.chats.useChatStore.getState()._editConversation(f.parent.id, current => ({ messages: [...current.messages, f.message.createDMessageFromFragments('assistant', [f.fragments.create_FunctionCallInvocation_ContentFragment(continuation.id, continuation.name, continuation.args)])] }));
+  await f.disk.flushDisk();
+  f.setProvider(async body => {
+    const receipts = body.input.filter((item: { type: string }) => item.type === 'function_call_output');
+    assert.ok(receipts.some((item: { call_id: string; output: string }) => item.call_id === 'saved-write' && JSON.parse(item.output).created === true));
+    assert.equal(body.input.at(-1).content[0].text, 'Verify your earlier work and finish.');
+    assert.equal(body.tools.some((tool: { name: string }) => ['spawn_agent', 'continue_agent'].includes(tool.name)), false);
+    return sse([{ type: 'message', id: 'continued-answer', role: 'assistant', content: [], status: 'completed' }]);
+  });
+  const { dispatchLocalTool } = await import('./local-tool-dispatch');
+  const result = await dispatchLocalTool(continuation, 'project', f.parent.id, new AbortController().signal);
+  assert.equal(result.conversationId, initial.conversationId);
+  assert.equal(result.status, 'ok');
+  assert.equal(f.chats.useChatStore.getState().conversations.filter(chat => chat.subagent).length, 1);
+  const requests = f.requests.length;
+  assert.equal((await dispatchLocalTool(continuation, 'project', f.parent.id, new AbortController().signal)).status, 'ok');
+  assert.equal(f.requests.length, requests, 'Replaying the same continuation must not start a second run.');
+});
+
+test('the child pauses on model inactivity and distinguishes it from a user stop', { timeout: 10000 }, async t => {
+  const f = await fixture(t);
+  const { SECTOR7_CHAT_EXECUTION } = await import('./runtime-config');
+  const previous = SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs;
+  SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs = 50;
+  t.after(() => { SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs = previous; });
+  f.setProvider(async (_body, signal) => new Promise<Response>((_resolve, reject) => {
+    assert.ok(signal);
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }));
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'incomplete');
+  assert.equal(result.reason, 'idle-timeout');
+  assert.equal(result.resumable, true);
+  assert.equal(result.stopped, undefined);
+  const { hasChatRun } = await import('./chat-run');
+  assert.equal(hasChatRun(String(result.conversationId)), false);
+  const saved = (await f.serverWorkspace.loadWorkspace(f.directory)).workspace!;
+  f.disk.pauseDiskWrites(true); f.chats.useChatStore.setState({ conversations: [] });
+  f.disk.installWorkspace(saved); await f.chats.useChatStore.persist.rehydrate(); f.disk.pauseDiskWrites(false);
+  assert.equal(f.chats.getConversation(String(result.conversationId))!.lastOutcome, 'incomplete');
+  assert.equal(f.chats.getConversation(String(result.conversationId))!.incompleteReason, 'idle-timeout');
+});
+
+test('changing results from identical polling calls keep the child running', async t => {
+  const f = await fixture(t);
+  let round = 0;
+  f.setProvider(async () => {
+    await writeFile(join(f.directory, 'fact.txt'), `Progress ${round}`);
+    if (round === 5) return sse([{ type: 'message', id: 'poll-answer', role: 'assistant', content: [], status: 'completed' }]);
+    return sse([{ type: 'function_call', id: `fc-poll-${round}`, call_id: `poll-${round++}`, name: 'folder_read', arguments: '{"folder_id":"repo","path":"fact.txt"}', status: 'completed' }]);
+  });
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.result, 'The project fact is October.');
+  assert.equal(result.reason, undefined);
+});
+
+test('response activity keeps a child alive beyond the response inactivity window', { timeout: 10000 }, async t => {
+  const f = await fixture(t);
+  const { SECTOR7_CHAT_EXECUTION } = await import('./runtime-config');
+  const previous = SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs;
+  SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs = 300;
+  t.after(() => { SECTOR7_CHAT_EXECUTION.responseIdleTimeoutMs = previous; });
+  f.setProvider(async () => {
+    const data = await sse([{ type: 'message', id: 'active-answer', role: 'assistant', content: [], status: 'completed' }]).text();
+    const packets = data.split('\n\n').filter(Boolean);
+    return new Response(new ReadableStream({ async start(controller) {
+      for (const packet of packets) {
+        controller.enqueue(new TextEncoder().encode(`${packet}\n\n`));
+        await new Promise(resolve => setTimeout(resolve, 40));
+      }
+      controller.close();
+    } }), { headers: { 'Content-Type': 'text/event-stream' } });
+  });
+  const result = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.result, 'The project fact is October.');
+});
+
+test('continuation rejects missing, foreign, unsaved and still-running child targets', async t => {
+  const f = await fixture(t);
+  f.setProvider(async () => sse([{ type: 'message', id: 'ready-answer', role: 'assistant', content: [], status: 'completed' }]));
+  const initial = await f.runSubagent(f.call, f.parent.id, new AbortController().signal);
+  const { continueSubagent } = await import('./subagents');
+  const { acquireChatRun } = await import('./chat-run');
+  const continuation = { id: 'protected-continuation', name: 'continue_agent', args: JSON.stringify({ conversationId: initial.conversationId, message: 'Continue.' }) };
+  await assert.rejects(continueSubagent({ ...continuation, args: JSON.stringify({ conversationId: 'missing-child', message: 'Continue.' }) }, f.parent.id, new AbortController().signal), /does not belong/);
+  await assert.rejects(continueSubagent(continuation, f.parent.id, new AbortController().signal), /not saved/);
+  f.chats.useChatStore.getState()._editConversation(f.parent.id, current => ({ messages: [...current.messages, f.message.createDMessageFromFragments('assistant', [f.fragments.create_FunctionCallInvocation_ContentFragment(continuation.id, continuation.name, continuation.args)])] }));
+  await f.disk.flushDisk();
+  const held = acquireChatRun(String(initial.conversationId));
+  try { await assert.rejects(continueSubagent(continuation, f.parent.id, new AbortController().signal), /already running/); }
+  finally { held.release(); }
+  f.chats.useChatStore.getState()._editConversation(String(initial.conversationId), { subagent: { parentConversationId: 'foreign-parent', invocationId: f.call.id } });
+  await assert.rejects(continueSubagent(continuation, f.parent.id, new AbortController().signal), /does not belong/);
+});
+
+test('parent and child keep running past five minutes while a local tool executes', async t => {
+  const f = await fixture(t);
+  f.chats.useChatStore.getState()._editConversation(f.parent.id, current => ({ chatConfig: { ...current.chatConfig, llmId: 'gpt-6.1-sol' }, messages: [current.messages[0]] }));
+  const { useAppChatStore } = await import('../../apps/chat/store-app-chat');
+  const prior = useAppChatStore.getState().autoTitleChat;
+  useAppChatStore.getState().setAutoTitleChat(false);
+  t.after(() => { f.disk.pauseDiskWrites(true); useAppChatStore.getState().setAutoTitleChat(prior); });
+  await f.disk.flushDisk();
+  const originalFetch = globalThis.fetch;
+  let advanced = false;
+  const start = Date.now();
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/api/local/folders') && !advanced) {
+      advanced = true;
+      t.mock.method(Date, 'now', () => start + 301000);
+    }
+    return originalFetch(url, init);
+  };
+  f.setProvider(async body => {
+    const result = body.input.find((item: { type: string }) => item.type === 'function_call_output');
+    if (result) return sse([{ type: 'message', id: 'long-parent-answer', role: 'assistant', content: [], status: 'completed' }]);
+    if (body.tools.some((tool: { name: string }) => tool.name === 'spawn_agent')) return sse([{ type: 'function_call', id: 'fc-long-spawn', call_id: f.call.id, name: 'spawn_agent', arguments: f.call.args, status: 'completed' }]);
+    return sse([{ type: 'function_call', id: 'fc-long-file', call_id: 'long-file', name: 'folder_read', arguments: '{"folder_id":"repo","path":"fact.txt"}', status: 'completed' }]);
+  });
+  const { runPersonaOnConversationHead } = await import('../../apps/chat/editors/chat-persona');
+  assert.equal(await runPersonaOnConversationHead('gpt-6.1-sol', f.parent.id), true);
+  assert.equal(advanced, true);
+  assert.equal(f.chats.getConversation(f.parent.id)!.lastOutcome, 'ok');
+  assert.equal(f.chats.useChatStore.getState().conversations.find(chat => chat.subagent)!.lastOutcome, 'ok');
+});
+
 test('a chat launches Sol with inherited tools, reads project files and returns a durable child result', async t => {
   const f = await fixture(t);
   f.setProvider(async body => {

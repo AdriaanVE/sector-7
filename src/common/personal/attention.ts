@@ -10,12 +10,14 @@ export const questionSchema = z.object({ questions: z.array(z.object({
 });
 export type QuestionInput = z.infer<typeof questionSchema>;
 export type PendingQuestion = QuestionInput & { invocationId: string; messageId: string; model: string; answered?: boolean };
-export type Outcome = 'ok' | 'error' | 'stopped' | 'interrupted';
+export type Outcome = 'ok' | 'error' | 'stopped' | 'interrupted' | 'incomplete';
+export type IncompleteReason = 'repeat-guard' | 'round-limit' | 'idle-timeout';
 export type Phase = 'Stopping' | 'Connecting' | 'Thinking' | 'Searching' | 'Running code' | 'Listing files' | 'Reading files' | 'Editing files' | 'Running command' | 'Running subagent' | 'Responding';
-export interface Attention { lastCompletedMessageId?: string; lastSeenMessageId?: string; lastOutcome?: Outcome; pendingQuestions?: PendingQuestion[] }
+export interface Attention { lastCompletedMessageId?: string; lastSeenMessageId?: string; lastOutcome?: Outcome; incompleteReason?: IncompleteReason; pendingQuestions?: PendingQuestion[] }
 export function attentionLabel(attention: Attention, working?: Phase | null): string | null {
   if (working) return working;
   if (attention.pendingQuestions?.some(question => !question.answered)) return 'Needs your answer';
+  if (attention.lastOutcome === 'incomplete') return 'Paused';
   if (attention.lastOutcome === 'error' || attention.lastOutcome === 'interrupted') return attention.lastOutcome === 'error' ? 'Failed' : 'Interrupted';
   if (attention.lastCompletedMessageId && attention.lastCompletedMessageId !== attention.lastSeenMessageId) return 'Unread';
   return null;
@@ -46,7 +48,7 @@ export function messagePhase(message: Pick<DMessage, 'fragments'>): Phase {
       if (name === 'folder_read') return 'Reading files';
       if (/folder_edit|folder_write|folder_move|folder_delete/.test(name)) return 'Editing files';
       if (name === 'local_command') return 'Running command';
-      if (name === 'spawn_agent') return 'Running subagent';
+      if (name === 'spawn_agent' || name === 'continue_agent') return 'Running subagent';
       if (/code|bash|python/.test(name)) return 'Running code';
       if (/search|fetch/.test(name)) return 'Searching';
     }

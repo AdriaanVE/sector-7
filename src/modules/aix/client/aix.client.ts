@@ -226,6 +226,7 @@ export function aixDecorateModelFromGlobals(model: AixAPI_Model, decorations: {
 
 interface AixClientOptions {
   abortSignal: AbortSignal | 'NON_ABORTABLE'; // 'NON_ABORTABLE' is a special case for non-abortable operations
+  onResponseActivity?: () => void; // Raw particles include heartbeats before any visible content.
   throttleParallelThreads?: number; // 0: disable, 1: default throttle (12Hz), 2+ reduce frequency with the square root
 
   // [Reattach] Internal hook - set by `aixReattachContent_DMessage_orThrow`. When present, seeds the LL
@@ -662,6 +663,7 @@ export async function aixChatGenerateContent_DMessage_orThrow<TServiceSettings e
         await onStreamingUpdate(dMessage, false);
       }
     },
+    clientOptions.onResponseActivity,
   );
 
   // Finalize DMessage
@@ -892,6 +894,7 @@ async function _aixChatGenerateContent_LL_unlocked(
   throttleParallelThreads: number | undefined,
   // optional streaming callback: not fired until the first piece of content
   onGenerateContentUpdate?: (accumulator: AixChatGenerateContent_LL, isDone: boolean) => MaybePromise<void>,
+  onResponseActivity?: () => void,
 ): Promise<AixChatGenerateContent_LL_Result> {
 
   // Inspector support - can be requested by the client, but granted on the server side
@@ -1043,8 +1046,10 @@ async function _aixChatGenerateContent_LL_unlocked(
        * - This catch [Error Channel 1]: tRPC/network/transport errors (connection, stream, abort) -> aixClassifyStreamingError
        * - Reassembler catch [Error Channel 2]: particle-processing errors (malformed particles, async work) -> aixClassifyReassemblyError
        */
-      for await (const particle of particleStream)
+      for await (const particle of particleStream) {
+        onResponseActivity?.();
         reassembler.enqueueWireParticle(particle);
+      }
 
       // [CSF] generators end cleanly on abort (unlike tRPC which throws) - route to catch
       abortSignal.throwIfAborted();

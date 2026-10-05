@@ -30,10 +30,10 @@ export async function assembleRequest(conversationId: string, model: string, his
     for (const instruction of instructions) if (typeof instruction === 'string') system.fragments.push(createTextContentFragment(instruction));
   }
   system.userFlags = [MESSAGE_FLAG_VND_ANT_CACHE_AUTO];
-  const tools = getConversation(conversationId)?.subagent ? localTools.filter(tool => tool.type !== 'function_call' || tool.function_call.name !== 'spawn_agent') : localTools;
+  const tools = getConversation(conversationId)?.subagent ? localTools.filter(tool => tool.type !== 'function_call' || !['spawn_agent', 'continue_agent'].includes(tool.function_call.name)) : localTools;
   system.fragments.push(createTextContentFragment(getConversation(conversationId)?.subagent
     ? 'You are a subagent handling the task supplied in this chat. Return a concise result with evidence and any blockers. You cannot delegate or ask the user questions; report missing decisions to the parent. Work within the task scope. Do not change project membership.'
-    : 'Use spawn_agent when the user asks for a subagent or applicable instructions request delegation. It defaults to GPT-6.1 Sol and medium effort. Supply a self-contained task and context. Subagents share the project files and return their result to this chat. Avoid overlapping writes.'));
+    : 'Use spawn_agent when the user asks for a subagent or applicable instructions request delegation. It defaults to GPT-6.1 Sol and medium effort. Supply a self-contained task and context. Subagents share the project files and return their result to this chat. Use continue_agent with the returned conversationId to resume an incomplete child or give it follow-up work. Avoid overlapping writes.'));
   let fullMessages: DMessage[] = filterCrossModelReasoning(history.filter(message => message.role !== 'system'), model).map(message => ({
     ...message,
     fragments: message.role === 'user' && message.metadata?.selectedSkills?.length ? [

@@ -9,6 +9,23 @@ export const subagentInput = z.object({
   effort: z.enum(CHAT_EFFORTS).default('medium'),
 });
 
+export const continueAgentInput = z.object({
+  conversationId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+  message: z.string().trim().min(1).max(64000),
+});
+
+export const continueAgentTool: AixTools_ToolDefinition = {
+  type: 'function_call',
+  function_call: {
+    name: 'continue_agent',
+    description: 'Continue one of this chat\'s saved subagents using its returned conversationId and a follow-up message. Reuses its history and completed tool results. Use for incomplete tasks or follow-up work instead of spawning a replacement. Waits for completion. Cannot continue another parent\'s child or a running child.',
+    input_schema: {
+      properties: { conversationId: { type: 'string' }, message: { type: 'string', description: 'Follow-up task or guidance for the existing child.' } },
+      required: ['conversationId', 'message'],
+    },
+  },
+};
+
 export const subagentTool: AixTools_ToolDefinition = {
   type: 'function_call',
   function_call: {

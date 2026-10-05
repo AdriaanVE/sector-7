@@ -253,7 +253,7 @@ export const useChatStore = create<ConversationsStore>()(/*devtools(*/
           return {
             messages: truncatedMessages,
             freshContainer: true,
-            pendingQuestions: [], lastCompletedMessageId: undefined, lastSeenMessageId: undefined, lastOutcome: undefined,
+            pendingQuestions: [], lastCompletedMessageId: undefined, lastSeenMessageId: undefined, lastOutcome: undefined, incompleteReason: undefined,
             tokenCount: updateMessagesTokenCounts(truncatedMessages, false, 'historyTruncateToIncluded'),
             updated: Date.now(),
             _abortController: null,

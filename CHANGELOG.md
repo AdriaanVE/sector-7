@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let chats and subagents continue beyond the previous tool-count, round and total runtime limits. Paused runs retain an incomplete status, and parent chats can continue saved children.
+
 - Publish the Homebrew cask directly to `AdriaanVE/homebrew-tap` after a successful desktop release, without a cask PR. Existing installs migrate through Homebrew tap metadata.
 - Fixed the Homebrew macOS dependency warning in the cask and release generator. The minimum remains macOS Ventura.
 
