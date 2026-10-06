@@ -103,6 +103,7 @@ test('silence deadline waits for done; busy close preserves final text and shows
   engine.stop('continuous-deadline', false); await settle();
   assert.equal(results.at(-1)?.done, false);
   assert.equal(socket.sent.at(-1), '{"type":"end"}');
+  socket.event({ type: 'error', message: 'engine busy \u2014 one stream at a time' });
   socket.onclose?.({ code: 1013 });
   assert.equal(results.at(-1)?.transcript, 'Keep this. ');
   assert.equal(results.at(-1)?.doneReason, 'api-error');

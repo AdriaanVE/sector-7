@@ -80,7 +80,10 @@ export class PhononStreamEngine implements IRecognitionEngine {
       if (!this.active || this.session !== session) return;
       try {
         const message = parsePhononEvent(event.data);
-        if (message.type === 'error') { this.fail(message.message); return; }
+        if (message.type === 'error') {
+          this.fail(message.message.startsWith('engine busy') ? 'Phonon is already transcribing another stream.' : message.message);
+          return;
+        }
         this.results = applyPhononEvent(this.results, message);
         this.setState({ hasSpeech: message.type !== 'done' && !!(this.results.transcript.trim() || this.results.interimTranscript) });
         if (this.results.done) this.finish();
