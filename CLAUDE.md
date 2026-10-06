@@ -3,6 +3,30 @@
 Guidance to Claude Code when working with code in this repository.
 
 
+## Release changes
+
+- Every user-visible behavior change must include a concise `CHANGELOG.md` entry under
+  `Unreleased` and a desktop version bump in the same PR, before pushing.
+- Default to `npm version patch --prefix desktop --no-git-tag-version`, run from the repository
+  root. Commit both `desktop/package.json` and `desktop/package-lock.json`. Use a minor or
+  major bump only when the requested release scope calls for it.
+- Bump once per PR, not once per fix or commit. Check current `main`, the PR diff and published
+  `desktop-v*` releases. Reuse a bump already included in that PR; otherwise choose the next
+  unused version. Never reuse a published version.
+- The desktop package version controls installed app and release artifacts. The root package
+  version records the source preview separately; change it only for a source-preview release.
+- Update current-version examples and artifact filenames in `README.md` and
+  `docs/electron-mac.md`. Preserve historical changelog entries, release links and fixtures.
+- Documentation, instruction and test-only changes do not require another version bump.
+- Before committing or pushing, run `npm run precommit` with the Node major matching the
+  installed native dependencies. Verify both desktop package files agree and run
+  `npm run desktop:check` for desktop changes.
+- Keep release notes under `Unreleased` until publication. A desktop version bump merged to
+  `main` automatically runs the Mac build, publishes its versioned release and updates the
+  Homebrew tap. Treat the bump as release intent. Manual workflow dispatch remains available
+  for retries; published versions cannot be reused.
+- Report the changelog entry, new desktop version, checks and publication status when done.
+
 ## Architecture Overview
 
 **Stack**: Next.js 15 (Pages Router for pages, App Router for API routes only), React 18, Emotion (CSS-in-JS), Zustand, tRPC + TanStack React Query, Edge runtime for AI and Node.js for data ops. UI is Material-UI **Joy**, not Material: import from `@mui/joy`; `next.config.ts` webpack-aliases `@mui/material` -> `@mui/joy` so stray/transitive Material imports still resolve to Joy (webpack only - turbopack skips that hook).
