@@ -28,8 +28,17 @@ export async function inspectAgentFolders(path: string) {
   const folder = await validateFolderPath(path);
   const agentFolders: ('codex' | 'claude')[] = [];
   for (const origin of ['codex', 'claude'] as const) {
-    try { if ((await lstat(await checkedFolderPath(folder, `.${origin}`))).isDirectory()) agentFolders.push(origin); }
+    try {
+      if ((await lstat(await checkedFolderPath(folder, `.${origin}`))).isDirectory()) {
+        agentFolders.push(origin);
+        continue;
+      }
+    }
     catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
+    try {
+      const file = await lstat(join(folder.path, origin === 'codex' ? 'AGENTS.md' : 'CLAUDE.md'));
+      if (file.isFile() || file.isSymbolicLink()) agentFolders.push(origin);
+    } catch (error) { if (!['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error; }
   }
   return { agentFolders };
 }

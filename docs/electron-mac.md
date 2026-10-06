@@ -1,6 +1,6 @@
 # Sector 7 Mac app
 
-Sector 7 Desktop 0.1.2 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
+Sector 7 Desktop 0.1.3 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
 
 ## Build and install
 
@@ -18,7 +18,7 @@ open "desktop/local/Sector 7.app"
 Build output:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.2-arm64.dmg`
+- `desktop/out/Sector-7-0.1.3-arm64.dmg`
 
 Merging a change to `desktop/package.json` on `main` starts a version check. A higher version automatically runs the quality gate and desktop checks, builds the Apple silicon app/DMG, and uploads them for 14 days. Package edits with the same version skip the release; version decreases fail. Manual builds and retries remain available through GitHub Actions > Build Mac app > Run workflow on `main`. The app is zipped with `ditto` to preserve its bundle permissions and uses the same ad-hoc signing as local builds. Other branches are skipped. Hosted execution of the automatic trigger must be verified after it reaches `main`.
 

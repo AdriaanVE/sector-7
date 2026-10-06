@@ -72,7 +72,7 @@ open "desktop/local/Sector 7.app"
 The build produces:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.2-arm64.dmg`
+- `desktop/out/Sector-7-0.1.3-arm64.dmg`
 
 The installer copies to the ignored `desktop/local/` directory and refuses to overwrite an existing app or install while Sector 7 is running. You can also copy the app from the DMG in Finder. Quit before replacing an installed copy.
 
