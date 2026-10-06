@@ -167,3 +167,27 @@ test('model warm-up does not spend the silence timeout before the first speech e
   socket.event({ type: 'done', text: 'After warm-up.' });
   assert.equal(results.at(-1)?.transcript, 'After warm-up.');
 });
+
+test('quiet microphone noise reaches Phonon as silence, while speech and word boundaries remain intact', async t => {
+  const fixture = browser(t);
+  const engine = new PhononStreamEngine(2000, () => {}, () => {});
+  t.after(() => engine.dispose());
+  engine.start(); await settle(); fixture.ready(); await settle();
+  const socket = fixture.sockets[0]; socket.open();
+  const noise = new Float32Array(1600).fill(0.008);
+  const speech = new Float32Array(1600).fill(0.08);
+  const emit = (frame: Float32Array) => fixture.worklets[0].port.onmessage?.({ data: frame });
+  emit(noise);
+  emit(noise);
+  const audio = () => socket.sent.filter((frame): frame is ArrayBuffer => frame instanceof ArrayBuffer).map(frame => new Float32Array(frame));
+  assert.equal(audio().length, 2);
+  assert.ok(audio().every(frame => frame.every(sample => sample === 0)));
+  emit(speech);
+  assert.equal(audio().length, 4);
+  assert.ok(audio().at(-2)?.every(sample => Math.abs(sample - 0.008) < 0.00001));
+  assert.ok(audio().at(-1)?.every(sample => Math.abs(sample - 0.08) < 0.00001));
+  emit(noise); // Quiet word ending stays within the short hangover.
+  assert.ok(audio().at(-1)?.some(sample => sample !== 0));
+  for (let i = 0; i < 5; i++) emit(noise);
+  assert.ok(audio().at(-1)?.every(sample => sample === 0));
+});

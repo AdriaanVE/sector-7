@@ -1,5 +1,6 @@
 import { applyPhononEvent, parsePhononEvent } from './phonon-events';
 import { startPhononPcm } from './phonon-pcm';
+import { PhononPcmGate } from './phonon-pcm-gate';
 import { createSpeechRecognitionResults } from './useSpeechRecognition';
 import type { IRecognitionEngine, SpeechDoneReason, SpeechRecognitionState, SpeechResult } from './useSpeechRecognition';
 
@@ -45,16 +46,10 @@ export class PhononStreamEngine implements IRecognitionEngine {
   private async begin(session: number) {
     const phonon = window.sector7Desktop?.phonon;
     if (!phonon) throw new Error('Phonon is available only in Sector 7 Desktop.');
+    const gate = new PhononPcmGate();
     this.captureStarting = startPhononPcm(frame => {
       if (!this.active || this.session !== session) return;
-      if (!this.streamReady || this.socket?.readyState !== WebSocket.OPEN) {
-        // Three minutes matches the model startup deadline (about 12 MB of PCM).
-        if (this.frames.length >= 1800) { this.fail('Phonon startup audio buffer is full. Try the mic again.'); return; }
-        this.frames.push(frame);
-        return;
-      }
-      if (this.socket.bufferedAmount > 16 * 1024 * 1024) { this.fail('Phonon cannot keep up with microphone audio. Try the mic again.'); return; }
-      this.socket.send(frame);
+      for (const filtered of gate.filter(frame)) this.sendFrame(filtered);
     });
     const capture = await this.captureStarting;
     if (!this.active || this.session !== session) { await capture.stop(); return; }
@@ -96,6 +91,18 @@ export class PhononStreamEngine implements IRecognitionEngine {
         ? 'Phonon is already transcribing another stream.'
         : 'Phonon stream stopped unexpectedly. Try the mic again to restart it. See phonon.log in Help > Open Logs Folder.');
     };
+  }
+
+  private sendFrame(frame: ArrayBuffer) {
+    if (!this.active) return;
+    if (!this.streamReady || this.socket?.readyState !== WebSocket.OPEN) {
+      // Three minutes matches the model startup deadline (about 12 MB of PCM).
+      if (this.frames.length >= 1800) { this.fail('Phonon startup audio buffer is full. Try the mic again.'); return; }
+      this.frames.push(frame);
+      return;
+    }
+    if (this.socket.bufferedAmount > 16 * 1024 * 1024) { this.fail('Phonon cannot keep up with microphone audio. Try the mic again.'); return; }
+    this.socket.send(frame);
   }
 
   stop(reason: SpeechDoneReason, sendOnDone: boolean) {

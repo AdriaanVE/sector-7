@@ -1,6 +1,6 @@
 /** Capture begins before model startup so the first spoken phrase is retained. */
 export async function startPhononPcm(onFrame: (pcm: ArrayBuffer) => void) {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
   let context: AudioContext | undefined;
   try {
     context = new AudioContext({ sampleRate: 16000 });
