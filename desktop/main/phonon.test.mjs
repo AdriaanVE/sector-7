@@ -59,6 +59,7 @@ test('health timeout and stop during startup terminate the owned process', async
   await phonon.stop();
   await assert.rejects(starting, /stopped/);
   assert.equal(phonon.status().state, 'idle');
+  assert.equal(phonon.status().message, undefined);
 });
 
 test('an exited Phonon server restarts on the next ensure with a fresh launch key', async t => {

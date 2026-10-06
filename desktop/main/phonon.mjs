@@ -91,7 +91,7 @@ export function createPhonon(config, logs, options = {}) {
         if (run === current) {
           run = undefined;
           state = current.missing ? 'not-installed' : 'idle';
-          message = error instanceof Error ? error.message : 'Phonon could not start. See phonon.log.';
+          message = current.cancelled ? undefined : error instanceof Error ? error.message : 'Phonon could not start. See phonon.log.';
         }
         throw error;
       }
