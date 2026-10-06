@@ -82,15 +82,15 @@ Closing the window waits for active work and pending saves. A failed save keeps 
 
 Local builds use ad-hoc signing. There is no Developer ID signature or notarization, so a downloaded build may need macOS approval before opening. See [desktop setup](docs/electron-mac.md) for configuration, logs, isolated launches and build-output overrides.
 
-### Manual GitHub build
+### GitHub builds
 
-Once the workflow is available on `main`, open **Actions > Build Mac app > Run workflow** and select **main**. This separate manual action runs the web quality gate and desktop checks, then builds the Apple silicon app and DMG. Download its artifacts from the completed run; they are retained for 14 days.
+Merging a desktop version bump to `main` automatically starts **Build Mac app**. It compares `desktop/package.json` with the version before the push; edits that leave the version unchanged skip the build. The workflow runs the web quality gate and desktop checks, then builds the Apple silicon app and DMG. Download its artifacts from the completed run; they are retained for 14 days.
 
-The app is zipped with `ditto` to preserve bundle permissions. Runs on other branches are skipped. Hosted execution still needs verification after the workflow reaches `main`.
+The app is zipped with `ditto` to preserve bundle permissions. Runs on other branches are skipped. For manual builds or retries, open **Actions > Build Mac app > Run workflow** and select **main**. Hosted execution of the automatic trigger still needs verification after this workflow reaches `main`.
 
 ### Homebrew installation and updates
 
-Every manual **Build Mac app** run publishes its build and updates `AdriaanVE/homebrew-tap` automatically. Configure a GitHub environment named `release` restricted to `main`. Store `SECTOR7_RELEASE_TOKEN` with Contents write access to `AdriaanVE/sector-7`, and `SECTOR7_HOMEBREW_TOKEN` with Contents write access only to `AdriaanVE/homebrew-tap`. Local `npm run desktop:build` does not publish.
+Every successful **Build Mac app** release run publishes its build and updates `AdriaanVE/homebrew-tap` automatically. Configure a GitHub environment named `release` restricted to `main`. Store `SECTOR7_RELEASE_TOKEN` with Contents write access to `AdriaanVE/sector-7`, and `SECTOR7_HOMEBREW_TOKEN` with Contents write access only to `AdriaanVE/homebrew-tap`. Local `npm run desktop:build` does not publish.
 
 After a successful build, the action publishes the ZIP and DMG under `desktop-v<version>` and writes the ZIP's SHA-256 cask directly to the dedicated tap. No cask PR is created. Install with:
 
