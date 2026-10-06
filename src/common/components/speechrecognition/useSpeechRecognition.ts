@@ -2,11 +2,13 @@ import * as React from 'react';
 
 import { Is, isBrowser } from '~/common/util/pwaUtils';
 import { useUIPreferencesStore } from '~/common/stores/store-ui';
+import { useAppChatStore } from '../../../apps/chat/store-app-chat';
 
 import { CapabilityBrowserSpeechRecognition } from '../useCapabilities';
 
 import { AudioRecorderEngine } from './AudioRecorderEngine';
 import { getSpeechRecognitionClass, WebSpeechApiEngine } from './WebSpeechApiEngine';
+import { PhononStreamEngine } from './PhononStreamEngine';
 
 // configuration
 export const PLACEHOLDER_INTERIM_TRANSCRIPT = 'Listening...';
@@ -37,7 +39,7 @@ export const browserSpeechRecognitionCapability = (): CapabilityBrowserSpeechRec
 
 // Interfaces used by Engines
 
-type RecognitionEngineType = 'webSpeechApi' | 'audioRecorder';
+type RecognitionEngineType = 'webSpeechApi' | 'audioRecorder' | 'phononStream';
 
 export interface IRecognitionEngine {
   engineType: RecognitionEngineType;
@@ -96,10 +98,14 @@ type SpeechResultCallback = (result: SpeechResult) => void;
  * @param engineType - The type of capture engine to use
  */
 export const useSpeechRecognition = (
-  engineType: RecognitionEngineType,
+  requestedEngine: RecognitionEngineType,
   onResultCallback: SpeechResultCallback,
   softStopTimeout: number,
 ) => {
+  const phononEnabled = useAppChatStore(state => state.phononEnabled);
+  const phononInputSettings = useAppChatStore(state => state.phononInputSettings);
+  const isDesktop = typeof window !== 'undefined' && !!window.sector7Desktop?.phonon;
+  const engineType = isDesktop && requestedEngine === 'webSpeechApi' ? 'phononStream' : requestedEngine;
 
   // state
   const [recognitionState, setRecognitionState] = React.useState<SpeechRecognitionState>({
@@ -167,6 +173,9 @@ export const useSpeechRecognition = (
     });
 
     switch (engineType) {
+      case 'phononStream':
+        engineRef.current = new PhononStreamEngine(softStopTimeoutRef.current, onResultCallbackRef.current, updateState);
+        break;
       case 'webSpeechApi':
 
         // check if the device is supported
@@ -210,6 +219,16 @@ export const useSpeechRecognition = (
     };
   }, [engineType, updateState]);
 
+  React.useEffect(() => {
+    if (engineRef.current instanceof PhononStreamEngine) engineRef.current.setEnabled(phononEnabled);
+  }, [engineType, phononEnabled]);
+
+  React.useEffect(() => {
+    if (engineRef.current instanceof PhononStreamEngine) {
+      void engineRef.current.setInputSettings(phononInputSettings).catch(() => updateState({ errorMessage: 'Microphone gain could not update. Try stopping and starting the mic.' }));
+    }
+  }, [engineType, phononInputSettings, updateState]);
+
 
   const startRecognition = React.useCallback(() => {
     if (!engineRef.current) return console.error('startRecognition: Speech recognition is not supported or not initialized.');
@@ -236,7 +255,7 @@ export const useSpeechRecognition = (
     if (!engineRef.current) return;
 
     // start or stop
-    if (hasError || engineRef.current?.isBetweenBeginEnd()) {
+    if (engineRef.current.isBetweenBeginEnd() || (hasError && engineRef.current.engineType !== 'phononStream')) {
       stopRecognition(sendOnDone === true);
       updateState({ errorMessage: null });
     } else

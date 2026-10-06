@@ -117,3 +117,30 @@ test('corrupt first-save restore rejects every legacy token and every former rec
   await assert.rejects(restoreWorkspace(zipSync({ 'workspace.json': strToU8(JSON.stringify({ ...emptyWorkspace(), stores: { 'app-chats': { version: 5, state: { conversations: [{}] } } } })) }), recovered.revision, dir, recovered.revisionEpoch));
   assert.deepEqual(await readFile(join(dir, 'workspace.json')), before);
 });
+
+test('Phonon preference survives disk and backup round trips and rejects invalid values', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'phonon-workspace-'));
+  const other = await mkdtemp(join(tmpdir(), 'phonon-restored-'));
+  t.after(() => Promise.all([rm(dir, { recursive: true, force: true }), rm(other, { recursive: true, force: true })]));
+  const workspace = emptyWorkspace();
+  workspace.stores['app-app-chat'] = { version: 3, state: { phononEnabled: false } };
+  await commitWorkspace(workspace, 0, dir);
+  assert.equal((await loadWorkspace(dir)).workspace?.stores['app-app-chat']?.state.phononEnabled, false);
+  const restored = await restoreWorkspace(await backupWorkspace(dir), 0, other);
+  assert.equal(restored.stores['app-app-chat']?.state.phononEnabled, false);
+  assert.throws(() => validateWorkspace({ ...workspace, stores: { 'app-app-chat': { version: 3, state: { phononEnabled: 'yes' } } } }));
+});
+
+test('Phonon input controls survive backup and reject out-of-range settings', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'phonon-input-settings-'));
+  const other = await mkdtemp(join(tmpdir(), 'phonon-input-restored-'));
+  t.after(() => Promise.all([rm(dir, { recursive: true, force: true }), rm(other, { recursive: true, force: true })]));
+  const input = { noiseFloor: 0.025, leadInMs: 200, tailMs: 500, autoGainControl: true };
+  const workspace = emptyWorkspace();
+  workspace.stores['app-app-chat'] = { version: 3, state: { phononInputSettings: input } };
+  await commitWorkspace(workspace, 0, dir);
+  const restored = await restoreWorkspace(await backupWorkspace(dir), 0, other);
+  assert.deepEqual(restored.stores['app-app-chat']?.state.phononInputSettings, input);
+  for (const patch of [{ noiseFloor: -1 }, { noiseFloor: 0.2 }, { leadInMs: 400 }, { tailMs: -1 }, { tailMs: 1001 }, { autoGainControl: 'yes' }])
+    assert.throws(() => validateWorkspace({ ...workspace, stores: { 'app-app-chat': { version: 3, state: { phononInputSettings: { ...input, ...patch } } } } }));
+});

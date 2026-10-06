@@ -12,6 +12,10 @@ files:
   - loading.html
   - package.json
 extraResources:
+  - from: python
+    to: python
+    filter:
+      - sitecustomize.py
   - from: ../LICENSE
     to: LICENSE
 mac:

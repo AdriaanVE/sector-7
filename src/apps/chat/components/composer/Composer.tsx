@@ -37,7 +37,7 @@ import { DMessageId, DMessageMetadata, DMetaReferenceItem, messageFragmentsReduc
 import { PhPaintBrush } from '~/common/components/icons/phosphor/PhPaintBrush';
 import { ShortcutKey, ShortcutObject, useGlobalShortcuts } from '~/common/components/shortcuts/useGlobalShortcuts';
 import { addSnackbar } from '~/common/components/snackbar/useSnackbarsStore';
-import { browserSpeechRecognitionCapability, PLACEHOLDER_INTERIM_TRANSCRIPT, SpeechResult, useSpeechRecognition } from '~/common/components/speechrecognition/useSpeechRecognition';
+import { PLACEHOLDER_INTERIM_TRANSCRIPT, SpeechResult, useSpeechRecognition } from '~/common/components/speechrecognition/useSpeechRecognition';
 import { DConversationId } from '~/common/stores/chat/chat.conversation';
 import { copyToClipboard, supportsClipboardRead } from '~/common/util/clipboardUtils';
 import { createHostedResourceContentFragment, createTextContentFragment, DMessageAttachmentFragment, DMessageContentFragment, duplicateDMessageFragments } from '~/common/stores/chat/chat.fragments';
@@ -439,7 +439,7 @@ export function Composer(props: {
     nextText = nextText ? nextText + ' ' + transcript : transcript;
 
     // auto-send (mic continuation mode) if requested
-    const autoSend = (result.flagSendOnDone || micContinuation) && nextText.length >= 1 && !noConversation; //&& assistantAbortible;
+    const autoSend = result.doneReason !== 'api-error' && result.doneReason !== 'switch-engine' && (result.flagSendOnDone || micContinuation) && nextText.length >= 1 && !noConversation; //&& assistantAbortible;
     const notUserStop = result.doneReason !== 'manual';
     if (autoSend) {
       // if (notUserStop) {
@@ -710,7 +710,7 @@ export function Composer(props: {
           toggleRecognition(false);
         }, description: 'Mic · Stop', level: 4,
       });
-    } else if (browserSpeechRecognitionCapability().mayWork)
+    } else if (recognitionState.isAvailable)
       composerShortcuts.push({
         key: 'm', ctrl: true, action: () => {
           // steal focus from the textarea, in case it has - so that enter cannot work against us
@@ -719,7 +719,7 @@ export function Composer(props: {
         }, description: 'Microphone',
       });
     return composerShortcuts;
-  }, [attachAppendClipboardItems, handleAttachFiles, handleFinishMicAndSend, openWebInputDialog, recognitionState.hasSpeech, recognitionState.isActive, sendStarted, showChatAttachments, toggleRecognition]));
+  }, [attachAppendClipboardItems, handleAttachFiles, handleFinishMicAndSend, openWebInputDialog, recognitionState.hasSpeech, recognitionState.isActive, recognitionState.isAvailable, sendStarted, showChatAttachments, toggleRecognition]));
 
 
   // ...
@@ -889,9 +889,10 @@ export function Composer(props: {
                         fontStyle: 'italic',
                       },
                     }}>
+                      {recognitionState.currentEngine === 'phononStream' && <Typography component='span' level='body-xs' sx={{ display: 'block', mb: 1, color: 'text.tertiary' }}>Phonon-2 · English · local</Typography>}
                       {!!composeText && <span className='preceding'>{composeText.endsWith(' ') ? composeText : composeText + ' '}</span>}
                       {speechInterimResult.transcript}
-                      <span className={speechInterimResult.interimTranscript === PLACEHOLDER_INTERIM_TRANSCRIPT ? 'placeholder' : 'interim'}>{speechInterimResult.interimTranscript}</span>
+                      <span className={speechInterimResult.interimTranscript === PLACEHOLDER_INTERIM_TRANSCRIPT || speechInterimResult.interimTranscript === 'Starting Phonon...' ? 'placeholder' : 'interim'}>{speechInterimResult.interimTranscript}</span>
                     </Typography>
                   </Card>
                 )}
@@ -920,7 +921,7 @@ export function Composer(props: {
               hasScreenCapture={supportsScreenCapture} hasCamera={supportsCameraCapture()} onlyImages={showChatAttachments === 'only-images'}
               onAttachClipboard={attachAppendClipboardItems} onAttachFiles={handleAttachFiles} onAttachScreenCapture={handleAttachScreenCapture}
               onOpenCamera={handleOpenCamera} onOpenWebInput={openWebInputDialog} />}
-            {recognitionState.isAvailable && <ButtonMicMemo variant={micVariant} color={micColor} errorMessage={recognitionState.errorMessage} onClick={handleToggleMic} />}
+            {recognitionState.isAvailable && <ButtonMicMemo variant={micVariant} color={micColor} errorMessage={recognitionState.errorMessage} label={recognitionState.currentEngine === 'phononStream' ? 'Phonon-2 · English · local' : undefined} onClick={handleToggleMic} />}
             {micIsRunning && <ButtonMicContinuationMemo isActive={micContinuation} variant='soft' color={micContinuation ? 'primary' : 'neutral'} onClick={handleToggleMicContinuation} />}
             {isDraw && <ButtonGroupDrawRepeat drawRepeat={drawRepeat} setDrawRepeat={setDrawRepeat} />}
             <Box sx={{ flex: 1 }} />

@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('sector7Desktop', {
+  phonon: {
+    ensure: () => ipcRenderer.invoke('sector7:phonon-ensure'),
+    stop: () => ipcRenderer.invoke('sector7:phonon-stop'),
+    status: () => ipcRenderer.invoke('sector7:phonon-status'),
+  },
   /** @param {string} requestId */
   pickFolder: requestId => ipcRenderer.invoke('sector7:pick-folder', requestId),
   /** @param {string} requestId */

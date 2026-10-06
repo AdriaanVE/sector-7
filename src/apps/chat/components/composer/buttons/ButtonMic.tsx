@@ -10,9 +10,9 @@ import { KeyStroke } from '~/common/components/KeyStroke';
 import { dontBlurTextareaOnMouseDown as handleDontBlurTextArea } from '~/common/components/dontBlurTextarea';
 
 
-const micLegend = (errorMessage: string | null) =>
+const micLegend = (errorMessage: string | null, label?: string) =>
   <Box sx={{ px: 1, py: 0.75, lineHeight: '1.5rem' }}>
-    Voice input<br />
+    {label || 'Voice input'}<br />
     <KeyStroke combo='Ctrl + M' sx={{ mt: 1, mb: 0.5 }} />
     {errorMessage && (
       <Alert variant='soft' color='danger' sx={{ mt: 2, mb: 0.5, flexDirection: 'column', alignItems: 'flex-start' }}>
@@ -31,13 +31,14 @@ function ButtonMic(props: {
   variant: VariantProp,
   color: ColorPaletteProp,
   errorMessage: string | null,
+  label?: string,
   noBackground?: boolean,
   onClick: () => void,
 }) {
 
   return (
-    <GoodTooltip placement='top' arrow enableInteractive title={micLegend(props.errorMessage)}>
-      <IconButton variant={props.variant} color={props.color} onMouseDown={handleDontBlurTextArea} onClick={props.onClick} sx={props.noBackground ? { background: 'none' } : {}}>
+    <GoodTooltip placement='top' arrow enableInteractive title={micLegend(props.errorMessage, props.label)}>
+      <IconButton aria-label={props.label || 'Voice input'} variant={props.variant} color={props.color} onMouseDown={handleDontBlurTextArea} onClick={props.onClick} sx={props.noBackground ? { background: 'none' } : {}}>
         <MicIcon />
       </IconButton>
     </GoodTooltip>

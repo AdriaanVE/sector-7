@@ -8,6 +8,7 @@ import { CHAT_MODELS, normalizeChatConfig } from './chat-config';
 import { questionSchema } from './attention';
 import { normalizeQuestionHistory } from './question-history';
 import type { DConversation } from '~/common/stores/chat/chat.conversation';
+import { phononInputSettingsSchema } from '~/common/components/speechrecognition/phonon-input-settings';
 
 export const safeId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 export const STORE_NAMES = ['app-chats', 'app-folders', 'app-project-files', 'app-personal-settings', 'app-personal-ui', 'app-app-chat', 'app-ui', 'app-app-chat-panes-2'] as const;
@@ -150,10 +151,14 @@ export function validateWorkspace(value: unknown): Workspace {
     if (!store) continue;
     const allowed = name === 'app-chats' ? ['conversations'] : name === 'app-folders' ? ['folders', 'enableFolders', 'migrationSummary']
       : name === 'app-project-files' ? ['files'] : name === 'app-personal-settings' ? ['instructions', 'showToolCalls']
-      : name === 'app-app-chat' ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'showTextDiff', 'showSystemMessages']
+      : name === 'app-app-chat' ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'phononEnabled', 'phononInputSettings', 'showTextDiff', 'showSystemMessages']
       : name === 'app-app-chat-panes-2' ? ['chatPanes', 'chatPaneFocusIndex']
       : name === 'app-ui' ? ['enterIsNewline', 'contentScaling', 'doubleClickToEdit', 'centerMode', 'complexityMode'] : ['sidebarOpen'];
     if (Object.keys(store.state).some(key => !allowed.includes(key))) throw new Error(`Unexpected durable field in ${name}.`);
+    if (name === 'app-app-chat') {
+      z.boolean().optional().parse(store.state.phononEnabled);
+      phononInputSettingsSchema.optional().parse(store.state.phononInputSettings);
+    }
     if (name === 'app-chats') {
       const chats = z.array(conversation).parse(store.state.conversations);
       uniqueIds(chats, 'chat');
