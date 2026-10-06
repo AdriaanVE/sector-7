@@ -7,6 +7,7 @@ import { loadConfig } from './config.mjs';
 import { externalUrl, isAppUrl, protectSession } from './security.mjs';
 import { logger, startBackend, stopBackend } from './server.mjs';
 import { createDesktopFolderPicker } from './folder-picker.mjs';
+import { createPhonon } from './phonon.mjs';
 
 app.setName('Sector 7');
 app.setPath('userData', join(app.getPath('appData'), 'Sector 7'));
@@ -15,6 +16,7 @@ app.enableSandbox();
 const desktop = dirname(dirname(fileURLToPath(import.meta.url)));
 /** @type {BrowserWindow | null} */ let window = null;
 /** @type {Awaited<ReturnType<typeof startBackend>> | undefined} */ let backend;
+/** @type {ReturnType<typeof createPhonon> | undefined} */ let phonon;
 /** @type {ReturnType<typeof loadConfig> extends Promise<infer T> ? T : never} */ let config;
 let closing = false;
 let quitting = false;
@@ -26,6 +28,14 @@ const log = logger(join(app.getPath('logs'), 'main.log'));
 const folderPicker = createDesktopFolderPicker({ window: () => window, origin: () => backend?.origin, show: (parent, options) => dialog.showOpenDialog(parent, options) });
 ipcMain.handle('sector7:pick-folder', (event, id) => folderPicker.pick(event, id));
 ipcMain.on('sector7:cancel-folder-picker', (event, id) => folderPicker.cancel(event, id));
+for (const [channel, action] of /** @type {const} */ ([['sector7:phonon-ensure', 'ensure'], ['sector7:phonon-stop', 'stop'], ['sector7:phonon-status', 'status']])) {
+  ipcMain.handle(channel, event => {
+    if (!phonon || !window || window.isDestroyed() || !backend || event.sender !== window.webContents
+      || event.senderFrame !== event.sender.mainFrame || !isAppUrl(event.senderFrame?.url ?? '', backend.origin))
+      throw new Error('Phonon requires the Sector 7 window.');
+    return phonon[action]();
+  });
+}
 
 ipcMain.on('sector7:close-ready', event => {
   if (window && event.sender === window.webContents && backend && isAppUrl(event.senderFrame?.url ?? '', backend.origin)) closeReady = true;
@@ -96,6 +106,7 @@ async function closeWindow(quit) {
 async function quitApp() {
   if (exiting) return;
   exiting = true;
+  await phonon?.stop();
   if (backend) await stopBackend(backend);
   app.exit(0);
 }
@@ -114,6 +125,7 @@ if (!app.requestSingleInstanceLock()) app.exit(0);
 else void app.whenReady().then(async () => {
   try {
     config = await loadConfig(app.getPath('userData'));
+    phonon = createPhonon(config.phonon, app.getPath('logs'));
     app.setAboutPanelOptions({ applicationName: 'Sector 7', applicationVersion: app.getVersion(), copyright: 'Based on big-AGI. MIT license.' });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: 'Sector 7', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },

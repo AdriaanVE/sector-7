@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add live local Phonon-2 English dictation to the Apple silicon desktop Composer, with lazy startup, a Voice input toggle, configurable command/port and final transcript recovery. Prepare Desktop 0.1.4.
+
 - Project settings load repository-root `AGENTS.md` or `CLAUDE.md` when the matching agent checkbox is enabled and saved, followed by instructions in its agent folder. Projects with only a root instruction file can enable the matching checkbox.
 - Automatically build and publish the Mac app and update Homebrew when a desktop version bump reaches `main`. Package edits without a version change skip the build; manual retries remain available.
 

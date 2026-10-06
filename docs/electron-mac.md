@@ -1,6 +1,6 @@
 # Sector 7 Mac app
 
-Sector 7 Desktop 0.1.3 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
+Sector 7 Desktop 0.1.4 packages the existing S7 application, Next.js backend and Electron runtime. It supports Apple silicon Macs. After installation, no Node, npm or separately started server is required.
 
 ## Build and install
 
@@ -18,7 +18,7 @@ open "desktop/local/Sector 7.app"
 Build output:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.3-arm64.dmg`
+- `desktop/out/Sector-7-0.1.4-arm64.dmg`
 
 Merging a change to `desktop/package.json` on `main` starts a version check. A higher version automatically runs the quality gate and desktop checks, builds the Apple silicon app/DMG, and uploads them for 14 days. Package edits with the same version skip the release; version decreases fail. Manual builds and retries remain available through GitHub Actions > Build Mac app > Run workflow on `main`. The app is zipped with `ditto` to preserve its bundle permissions and uses the same ad-hoc signing as local builds. Other branches are skipped. Hosted execution of the automatic trigger must be verified after it reaches `main`.
 
@@ -56,6 +56,7 @@ The first launch creates `~/Library/Application Support/Sector 7/config.json`. I
 {
   "port": 47100,
   "preventSleep": true,
+  "phonon": { "command": "fermion", "port": 8010 },
   "bifrost": {
     "baseUrl": "https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/anthropic",
     "openaiBaseUrl": "https://bifrost.customer-assist-dev.awsnprd.external.telenet.be/openai",
@@ -81,7 +82,23 @@ Closing the window stops active chat work, waits for it to settle, and flushes p
 
 Add folder opens Electron's native directory sheet attached to the Sector 7 window. The chosen path still passes through the server's folder validation. Cancellation discards the result; duplicate requests cannot open competing sheets. The browser launcher builds its AppKit helper separately. Files and commands retain S7's local process permissions. They are not sandboxed to the connected repository. The Finder launch resolves the login shell PATH so development tools remain available. External HTTP(S) and mail links open in your default app; navigation and remote Electron windows are blocked. The renderer has no Node access. A narrow preload coordinates saving before close and directory selection. Picker requests require the app window, main frame and exact local origin.
 
-Chrome's Google-backed Web Speech dictation is unavailable in Electron. Dedicated voice/image providers, screen capture, automatic updates, notarization and Intel/universal packaging are outside v0.1. Microphone permission supports audio requests from the app origin only. Normal export/attachment dialogs use Chromium; backups and restore use the existing S7 flows.
+Chrome keeps its Google-backed Web Speech dictation. Electron uses local Phonon-2 dictation, described below. Dedicated image providers, screen capture, automatic updates, notarization and Intel/universal packaging are outside v0.1. Microphone permission supports audio requests from the app origin only. Normal export/attachment dialogs use Chromium; backups and restore use the existing S7 flows.
+
+## Voice input
+
+Install Phonon separately on an Apple silicon Mac:
+
+```sh
+pip install fermion-research mlx mlx-audio mlx-lm soundfile scipy zstandard
+```
+
+The Composer mic and Ctrl+M stream microphone audio directly to a local Phonon-2 server. Finished segments stay visible while the current phrase updates; stopping the mic or reaching Mic Timeout waits for the final transcript. English is the only supported input language, even when Language selects another language. Chrome continues to use Web Speech.
+
+Settings > Voice input shows the Phonon toggle and its status before the language and timeout controls. Phonon is enabled by default but starts only on the first mic press. Turning it off hides the desktop mic and stops the server; turning it back on starts nothing. Once started, it stays up until toggle off or app quit. The first run downloads the model separately (about 164 MB), and startup/Metal warm-up can take seconds. Audio captured during startup is buffered for up to three minutes and sent when ready. Missing installation, busy streams, crashes and startup failures show an error while preserving finalized text. The next mic press retries a stopped server.
+
+`phonon.command` is a single executable name or absolute path, without shell arguments. Finder launches resolve the login shell PATH. `phonon.port` defaults to 8010, must be between 1024 and 65535, and must differ from the desktop backend port. `SECTOR7_PHONON_COMMAND` and `SECTOR7_PHONON_PORT` override these values. There is no `enabled` config field; the toggle is saved with workspace settings and included in backups.
+
+The server binds to 127.0.0.1 with a random per-launch key. The renderer sends 16 kHz mono Float32 PCM over the authenticated WebSocket. Phonon output goes to `phonon.log` in Help > Open Logs Folder, with the launch key redacted. Phonon, Python and model weights are not bundled in the DMG. Intel, CUDA, other models and browser Phonon integration are deferred.
 
 ## Implementation and checks
 

@@ -72,7 +72,7 @@ open "desktop/local/Sector 7.app"
 The build produces:
 
 - `desktop/out/mac-arm64/Sector 7.app`
-- `desktop/out/Sector-7-0.1.3-arm64.dmg`
+- `desktop/out/Sector-7-0.1.4-arm64.dmg`
 
 The installer copies to the ignored `desktop/local/` directory and refuses to overwrite an existing app or install while Sector 7 is running. You can also copy the app from the DMG in Finder. Quit before replacing an installed copy.
 
@@ -149,7 +149,7 @@ Browser caches and the Electron profile are disposable. Electron stores its prof
 
 Use **Settings** for validated ZIP backups and recovery. Workspace backups include saved chats, projects and owned assets. They do not back up connected repositories or local edit/command recovery directories. Keep repositories in Git and maintain their own backups. See [storage and backup](docs/local-workspace-data.md).
 
-Chat requests and native web tools travel through the configured Bifrost gateway. Local-first storage does not mean offline inference. Chrome browser dictation uses Google-backed Web Speech; that dictation path is unavailable in Electron. Leave analytics settings unset for the personal local app.
+Chat requests and native web tools travel through the configured Bifrost gateway. Local-first storage does not mean offline inference. Chrome browser dictation uses Google-backed Web Speech. Electron uses local, live Phonon-2 dictation in English with a user-installed Fermion command; see [desktop voice setup](docs/electron-mac.md#voice-input). Leave analytics settings unset for the personal local app.
 
 ## Development and checks
 

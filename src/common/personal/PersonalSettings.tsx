@@ -3,6 +3,7 @@ import { Alert, Box, Button, Checkbox, Textarea, Typography } from '@mui/joy';
 import { usePersonalSettings } from './store-personal-settings';
 import { currentWorkspace, flushDisk, pauseDiskWrites, useDiskStatus, downloadWorkspaceBackup } from './disk-storage';
 import { useChatAutoAI } from '../../apps/chat/store-app-chat';
+import { VoiceInSettings } from '../../apps/settings-modal/VoiceInSettings';
 
 export function PersonalSettings() {
   const settings = usePersonalSettings();
@@ -21,6 +22,10 @@ export function PersonalSettings() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Restore failed.'); pauseDiskWrites(false); }
   };
   return <Box sx={{ display: 'grid', gap: 3, maxWidth: 680, minWidth: 0 }}>
+    <Box component='section' sx={{ display: 'grid', gap: 1.5 }}>
+      <Typography level='title-md'>Voice input</Typography>
+      <VoiceInSettings isMobile={false} />
+    </Box>
     <Box component='section' sx={{ display: 'grid', gap: 1.5 }}>
       <Typography level='title-md'>Personal instructions</Typography>
       <Textarea minRows={5} value={settings.instructions} aria-label='Personal instructions' sx={{
@@ -43,7 +48,6 @@ export function PersonalSettings() {
       <Checkbox label='Automatic AI extras' checked={extras} onChange={event => { chatAI.setAutoSuggestDiagrams(event.target.checked); chatAI.setAutoSuggestHTMLUI(event.target.checked); chatAI.setAutoSuggestQuestions(event.target.checked); chatAI.setAutoSuggestAttachmentPrompts(event.target.checked); }} />
       <Box component='ul' sx={{ m: 0, pl: 2.25, display: 'grid', gap: 0.75, color: 'text.tertiary', fontSize: 'sm', lineHeight: 1.6 }}>
         <li>Automatic suggestions use Sonnet 5.5 with medium effort.</li>
-        <li>Microphone dictation uses Chrome Web Speech, which sends audio to Google. Voice model setup is pending.</li>
         <li>Image generation is unconfigured. Choose a server-side image connection in a later setup.</li>
       </Box>
     </Box>

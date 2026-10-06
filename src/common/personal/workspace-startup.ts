@@ -37,7 +37,7 @@ export async function initializeWorkspace(stores: HydratableStore[], legacyReads
       if (!raw) continue;
       const value = JSON.parse(raw);
       const keys = name === 'app-app-chat'
-        ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'showTextDiff', 'showSystemMessages']
+        ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'phononEnabled', 'showTextDiff', 'showSystemMessages']
         : ['enterIsNewline', 'contentScaling', 'doubleClickToEdit', 'centerMode', 'complexityMode'];
       legacy.stores[name] = { version: value.version ?? 0, state: Object.fromEntries(Object.entries(value.state || {}).filter(([key]) => keys.includes(key))) };
     }

@@ -150,10 +150,11 @@ export function validateWorkspace(value: unknown): Workspace {
     if (!store) continue;
     const allowed = name === 'app-chats' ? ['conversations'] : name === 'app-folders' ? ['folders', 'enableFolders', 'migrationSummary']
       : name === 'app-project-files' ? ['files'] : name === 'app-personal-settings' ? ['instructions', 'showToolCalls']
-      : name === 'app-app-chat' ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'showTextDiff', 'showSystemMessages']
+      : name === 'app-app-chat' ? ['autoSuggestAttachmentPrompts', 'autoSuggestDiagrams', 'autoSuggestHTMLUI', 'autoSuggestQuestions', 'autoTitleChat', 'tokenCountingMethod', 'micTimeoutMs', 'phononEnabled', 'showTextDiff', 'showSystemMessages']
       : name === 'app-app-chat-panes-2' ? ['chatPanes', 'chatPaneFocusIndex']
       : name === 'app-ui' ? ['enterIsNewline', 'contentScaling', 'doubleClickToEdit', 'centerMode', 'complexityMode'] : ['sidebarOpen'];
     if (Object.keys(store.state).some(key => !allowed.includes(key))) throw new Error(`Unexpected durable field in ${name}.`);
+    if (name === 'app-app-chat') z.boolean().optional().parse(store.state.phononEnabled);
     if (name === 'app-chats') {
       const chats = z.array(conversation).parse(store.state.conversations);
       uniqueIds(chats, 'chat');
