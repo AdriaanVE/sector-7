@@ -1,6 +1,8 @@
 import { applyPhononEvent, parsePhononEvent } from './phonon-events';
 import { startPhononPcm } from './phonon-pcm';
 import { PhononPcmGate } from './phonon-pcm-gate';
+import { defaultPhononInputSettings } from './phonon-input-settings';
+import type { PhononInputSettings } from './phonon-input-settings';
 import { createSpeechRecognitionResults } from './useSpeechRecognition';
 import type { IRecognitionEngine, SpeechDoneReason, SpeechRecognitionState, SpeechResult } from './useSpeechRecognition';
 
@@ -17,6 +19,7 @@ export class PhononStreamEngine implements IRecognitionEngine {
   private session = 0;
   private socket?: WebSocket;
   private captureStarting?: ReturnType<typeof startPhononPcm>;
+  private inputSettings = defaultPhononInputSettings;
   private frames: ArrayBuffer[] = [];
   private inactivityTimer?: ReturnType<typeof setTimeout>;
   private deadlineTimer?: ReturnType<typeof setTimeout>;
@@ -49,8 +52,8 @@ export class PhononStreamEngine implements IRecognitionEngine {
     const gate = new PhononPcmGate();
     this.captureStarting = startPhononPcm(frame => {
       if (!this.active || this.session !== session) return;
-      for (const filtered of gate.filter(frame)) this.sendFrame(filtered);
-    });
+      for (const filtered of gate.filter(frame, this.inputSettings)) this.sendFrame(filtered);
+    }, this.inputSettings.autoGainControl);
     const capture = await this.captureStarting;
     if (!this.active || this.session !== session) { await capture.stop(); return; }
     if (!this.stopping) this.setState({ hasAudio: true });
@@ -110,6 +113,7 @@ export class PhononStreamEngine implements IRecognitionEngine {
     this.stopping = true;
     this.results = { ...this.results, doneReason: reason, flagSendOnDone: sendOnDone };
     clearTimeout(this.inactivityTimer);
+    this.inactivityTimer = undefined;
     const session = this.session;
     void this.stopCapture().then(() => {
       if (!this.active || this.session !== session) return;
@@ -136,13 +140,25 @@ export class PhononStreamEngine implements IRecognitionEngine {
 
   isBetweenBeginEnd() { return this.active; }
 
+  async setInputSettings(settings: PhononInputSettings) {
+    const gainChanged = settings.autoGainControl !== this.inputSettings.autoGainControl;
+    this.inputSettings = settings;
+    if (!gainChanged) return;
+    const session = this.session;
+    const capture = await this.captureStarting?.catch(() => undefined);
+    if (this.active && this.session === session) await capture?.setAutoGainControl(settings.autoGainControl);
+  }
+
   updateConfiguration(_language: string, softStopTimeout: number, onResult: (result: SpeechResult) => void) {
+    const timeoutChanged = this.softStopTimeout !== softStopTimeout;
     this.softStopTimeout = softStopTimeout;
     this.onResult = onResult;
+    if (timeoutChanged && this.inactivityTimer && !this.stopping) this.resetInactivity();
   }
 
   private resetInactivity() {
     clearTimeout(this.inactivityTimer);
+    this.inactivityTimer = undefined;
     if (!this.stopping && this.softStopTimeout > 0) this.inactivityTimer = setTimeout(() => this.stop('continuous-deadline', false), this.softStopTimeout);
   }
 
@@ -180,7 +196,9 @@ export class PhononStreamEngine implements IRecognitionEngine {
 
   private cleanup() {
     clearTimeout(this.inactivityTimer);
+    this.inactivityTimer = undefined;
     clearTimeout(this.deadlineTimer);
+    this.deadlineTimer = undefined;
     if (this.socket) {
       this.socket.onopen = this.socket.onmessage = this.socket.onclose = this.socket.onerror = null;
       this.socket.close(); this.socket = undefined;

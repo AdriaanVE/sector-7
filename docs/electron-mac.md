@@ -92,11 +92,17 @@ Install Phonon separately on an Apple silicon Mac:
 pip install fermion-research mlx mlx-audio mlx-lm soundfile scipy zstandard
 ```
 
-The Composer mic and Ctrl+M stream microphone audio directly to a local Phonon-2 server. Finished segments stay visible while the current phrase updates; stopping the mic or reaching Mic Timeout waits for the final transcript. English is the only supported input language, even when Language selects another language. Chrome continues to use Web Speech.
+The Composer mic and Ctrl+M stream microphone audio directly to a local Phonon-2 server. Finished segments stay visible while the current phrase updates; stopping the mic or reaching Pause before stopping waits for the final transcript. English is the only supported input language, even when Language selects another language. Chrome continues to use Web Speech.
 
-Quiet microphone audio is muted before decoding using a 0.015 RMS floor. A short lead-in and 300 ms tail preserve word boundaries. Automatic microphone gain is disabled to keep room noise from being amplified into false speech. Louder background audio can still cross the energy threshold; this is not a speech classifier.
+Voice input settings expose Noise threshold (0-10%), Speech lead-in (0-300 ms), Speech tail (0-1000 ms) and Automatic mic gain. Defaults are 1.5% (0.015 RMS), 100 ms lead-in, 600 ms tail and gain off. Increase Noise threshold if silence produces words; lower it if quiet speech is missed. Speech tail protects quiet word endings. Pause before stopping controls the separate delay after the last transcript update.
+
+Changes apply during dictation: the gate reads the settings on each frame, and automatic gain updates the active microphone track. If the device rejects a gain update, the mic reports an error and recommends restarting capture. Settings save with the workspace and backups. Reset input defaults restores the four input controls. Louder background audio can still cross the energy threshold; this is not a speech classifier.
+
+Warm up now loads Phonon and runs the initial Metal decode before dictation, without microphone access. It shifts the first-start wait earlier; subsequent dictations reuse the process until toggle off or app quit. Stop an active dictation before warming up. Automatic background startup is not enabled by default.
 
 Settings > Voice input shows the Phonon toggle and its status before the language and timeout controls. Phonon is enabled by default but starts only on the first mic press. Turning it off hides the desktop mic and stops the server; turning it back on starts nothing. Once started, it stays up until toggle off or app quit. The first run downloads the model separately (about 164 MB), and startup/Metal warm-up can take seconds. Audio captured during startup is buffered for up to three minutes and sent when ready. Missing installation, busy streams, crashes and startup failures show an error while preserving finalized text. The next mic press retries a stopped server.
+
+Phonon keeps its model and MLX allocation cache in memory after dictation for faster reuse. Fermion 0.2.9 does not cap this cache: live partial decodes with changing audio lengths can consume several GB. Turning Phonon off releases the owned process and its memory; turning it on keeps startup lazy. A cache limit in Fermion is the preferred fix for sustained dictation.
 
 `phonon.command` is a single executable name or absolute path, without shell arguments. Finder launches resolve the login shell PATH. `phonon.port` defaults to 8010, must be between 1024 and 65535, and must differ from the desktop backend port. `SECTOR7_PHONON_COMMAND` and `SECTOR7_PHONON_PORT` override these values. There is no `enabled` config field; the toggle is saved with workspace settings and included in backups.
 

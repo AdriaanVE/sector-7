@@ -103,6 +103,7 @@ export const useSpeechRecognition = (
   softStopTimeout: number,
 ) => {
   const phononEnabled = useAppChatStore(state => state.phononEnabled);
+  const phononInputSettings = useAppChatStore(state => state.phononInputSettings);
   const isDesktop = typeof window !== 'undefined' && !!window.sector7Desktop?.phonon;
   const engineType = isDesktop && requestedEngine === 'webSpeechApi' ? 'phononStream' : requestedEngine;
 
@@ -221,6 +222,12 @@ export const useSpeechRecognition = (
   React.useEffect(() => {
     if (engineRef.current instanceof PhononStreamEngine) engineRef.current.setEnabled(phononEnabled);
   }, [engineType, phononEnabled]);
+
+  React.useEffect(() => {
+    if (engineRef.current instanceof PhononStreamEngine) {
+      void engineRef.current.setInputSettings(phononInputSettings).catch(() => updateState({ errorMessage: 'Microphone gain could not update. Try stopping and starting the mic.' }));
+    }
+  }, [engineType, phononInputSettings, updateState]);
 
 
   const startRecognition = React.useCallback(() => {

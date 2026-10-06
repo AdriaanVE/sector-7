@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { DLLMId } from '~/common/stores/llms/llms.types';
 import { Is } from '~/common/util/pwaUtils';
+import { defaultPhononInputSettings, PhononInputSettings } from '~/common/components/speechrecognition/phonon-input-settings';
 
 
 export type ChatAutoSpeakType = 'off' | 'firstLine' | 'all';
@@ -73,6 +74,8 @@ interface AppChatStore {
   setMicTimeoutMs: (micTimeoutMs: number) => void;
   phononEnabled: boolean;
   setPhononEnabled: (enabled: boolean) => void;
+  phononInputSettings: PhononInputSettings;
+  setPhononInputSettings: (settings: Partial<PhononInputSettings>) => void;
 
   showPersonaIcons2: boolean;
   toggleShowPersonaIcons: () => void;
@@ -160,6 +163,8 @@ export const useAppChatStore = create<AppChatStore>()(persist(
     setMicTimeoutMs: (micTimeoutMs: number) => _set({ micTimeoutMs }),
     phononEnabled: true,
     setPhononEnabled: (phononEnabled: boolean) => _set({ phononEnabled }),
+    phononInputSettings: defaultPhononInputSettings,
+    setPhononInputSettings: settings => _set(state => ({ phononInputSettings: { ...state.phononInputSettings, ...settings } })),
 
     // new default on 2024-11-18: disable icons by default, too confusing
     showPersonaIcons2: false,
@@ -201,6 +206,7 @@ export const useAppChatStore = create<AppChatStore>()(persist(
       autoSuggestAttachmentPrompts: state.autoSuggestAttachmentPrompts, autoSuggestDiagrams: state.autoSuggestDiagrams,
       autoSuggestHTMLUI: state.autoSuggestHTMLUI, autoSuggestQuestions: state.autoSuggestQuestions, autoTitleChat: state.autoTitleChat,
       tokenCountingMethod: state.tokenCountingMethod, micTimeoutMs: state.micTimeoutMs, phononEnabled: state.phononEnabled, showTextDiff: state.showTextDiff, showSystemMessages: state.showSystemMessages,
+      phononInputSettings: state.phononInputSettings,
     }) as AppChatStore,
     version: 3, // note: v2 is a `dev`-only progressive-disclosure migration (panels not present on `main`); jump 1 -> 3 to stay aligned
 

@@ -6,10 +6,11 @@ import type { SpeechRecognitionState, SpeechResult } from './useSpeechRecognitio
 
 const settle = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 
-function browser(t: TestContext) {
+function browser(t: TestContext, options: { capturePending?: boolean; rejectGain?: boolean } = {}) {
   const sockets: Socket[] = [];
   const worklets: Worklet[] = [];
   let stopped = 0;
+  const gainChanges: boolean[] = [];
   let resolveStartup: (value: { url: string }) => void = () => {};
   const startup = new Promise<{ url: string }>(resolve => { resolveStartup = resolve; });
   class Socket {
@@ -41,18 +42,20 @@ function browser(t: TestContext) {
     disconnect() {}
     audio() { this.port.onmessage?.({ data: new Float32Array([0.5]) }); }
   }
+  let resolveCapture: () => void = () => {};
+  const captureReady = new Promise<void>(resolve => { resolveCapture = resolve; });
   class Context {
     sampleRate = 16000;
     destination = {};
     audioWorklet = { addModule: async () => {} };
     createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
-    async resume() {}
+    async resume() { if (options.capturePending) await captureReady; }
     async close() {}
   }
   const descriptors = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({
     window: { sector7Desktop: { phonon: { ensure: () => startup } } },
-    navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => { stopped++; } }] }) } },
+    navigator: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop: () => { stopped++; }, applyConstraints: async (value: MediaTrackConstraints) => { gainChanges.push(value.autoGainControl === true); if (options.rejectGain) throw new Error('unsupported gain'); } }] }) } },
     AudioContext: Context, AudioWorkletNode: Worklet, WebSocket: Socket,
   })) {
     descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -62,7 +65,7 @@ function browser(t: TestContext) {
     if (descriptor) Object.defineProperty(globalThis, name, descriptor);
     else Reflect.deleteProperty(globalThis, name);
   } });
-  return { sockets, worklets, ready: () => resolveStartup({ url: 'ws://127.0.0.1:8010/v1/audio/stream?api_key=fixture' }), stopped: () => stopped };
+  return { sockets, worklets, captureReady: resolveCapture, ready: () => resolveStartup({ url: 'ws://127.0.0.1:8010/v1/audio/stream?api_key=fixture' }), stopped: () => stopped, gainChanges: () => gainChanges };
 }
 
 test('manual stop during startup sends buffered PCM before end and keeps authoritative done text', async t => {
@@ -188,6 +191,94 @@ test('quiet microphone noise reaches Phonon as silence, while speech and word bo
   assert.ok(audio().at(-1)?.every(sample => Math.abs(sample - 0.08) < 0.00001));
   emit(noise); // Quiet word ending stays within the short hangover.
   assert.ok(audio().at(-1)?.some(sample => sample !== 0));
-  for (let i = 0; i < 5; i++) emit(noise);
+  for (let i = 0; i < 7; i++) emit(noise);
   assert.ok(audio().at(-1)?.every(sample => sample === 0));
+});
+
+test('changing input settings during dictation updates the gate and microphone gain immediately', async t => {
+  const fixture = browser(t);
+  const engine = new PhononStreamEngine(2000, () => {}, () => {});
+  t.after(() => engine.dispose());
+  engine.start(); await settle(); fixture.ready(); await settle();
+  const socket = fixture.sockets[0]; socket.open();
+  const emit = () => fixture.worklets[0].port.onmessage?.({ data: new Float32Array(1600).fill(0.008) });
+  const audio = () => socket.sent.filter((frame): frame is ArrayBuffer => frame instanceof ArrayBuffer).map(frame => new Float32Array(frame));
+  emit();
+  assert.ok(audio().at(-1)?.every(sample => sample === 0));
+  await engine.setInputSettings({ noiseFloor: 0.004, leadInMs: 0, tailMs: 0, autoGainControl: true });
+  emit();
+  assert.ok(audio().at(-1)?.every(sample => sample > 0));
+  await engine.setInputSettings({ noiseFloor: 0.02, leadInMs: 0, tailMs: 0, autoGainControl: false });
+  emit();
+  assert.ok(audio().at(-1)?.every(sample => sample === 0));
+  assert.equal(fixture.sockets.length, 1);
+  assert.equal(fixture.stopped(), 0);
+  assert.deepEqual(fixture.gainChanges(), [true, false]);
+});
+
+test('speech lead-in and tail settings preserve the chosen audio durations', async t => {
+  const fixture = browser(t);
+  const engine = new PhononStreamEngine(2000, () => {}, () => {});
+  t.after(() => engine.dispose());
+  await engine.setInputSettings({ noiseFloor: 0.015, leadInMs: 200, tailMs: 600, autoGainControl: false });
+  engine.start(); await settle(); fixture.ready(); await settle();
+  const socket = fixture.sockets[0]; socket.open();
+  const emit = (value: number) => fixture.worklets[0].port.onmessage?.({ data: new Float32Array(1600).fill(value) });
+  emit(0.001); emit(0.002); emit(0.003); emit(0.08);
+  const audio = () => socket.sent.filter((frame): frame is ArrayBuffer => frame instanceof ArrayBuffer).map(frame => new Float32Array(frame));
+  assert.equal(audio().at(-2)?.length, 3200);
+  assert.ok(audio().at(-2)?.slice(0, 1600).every(sample => Math.abs(sample - 0.002) < 0.00001));
+  assert.ok(audio().at(-2)?.slice(1600).every(sample => Math.abs(sample - 0.003) < 0.00001));
+  for (let i = 0; i < 6; i++) emit(0.008);
+  assert.ok(audio().slice(-6).every(frame => frame.some(sample => sample > 0)));
+  emit(0.008);
+  assert.ok(audio().at(-1)?.every(sample => sample === 0));
+});
+
+test('manual warm-up primes Phonon without microphone capture', async t => {
+  const fixture = browser(t);
+  const { warmPhonon } = await import('./phonon-warmup');
+  const warmed = warmPhonon();
+  fixture.ready(); await settle();
+  const socket = fixture.sockets[0]; socket.open();
+  assert.deepEqual(socket.sent, ['{"sample_rate":16000,"format":"pcm_f32le"}', '{"type":"end"}']);
+  assert.equal(fixture.worklets.length, 0);
+  socket.event({ type: 'done', text: '' });
+  await warmed;
+  assert.equal(socket.readyState, 3);
+});
+
+
+test('changing the pause timeout in a reused session waits for its first transcript event', async t => {
+  const fixture = browser(t);
+  const engine = new PhononStreamEngine(2000, () => {}, () => {});
+  t.after(() => engine.dispose());
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  engine.start(); await settle(); fixture.ready(); await settle();
+  const first = fixture.sockets[0]; first.open();
+  first.event({ type: 'partial', text: 'first session' });
+  first.event({ type: 'done', text: 'First session.' });
+  engine.start(); await settle();
+  engine.updateConfiguration('en-US', 600, () => {});
+  const second = fixture.sockets[1]; second.open();
+  t.mock.timers.tick(601); await settle();
+  assert.equal(fixture.stopped(), 1);
+  assert.equal(second.sent.some(value => value === '{"type":"end"}'), false);
+  second.event({ type: 'partial', text: 'second session' });
+  t.mock.timers.tick(600); await settle();
+  assert.equal(second.sent.at(-1), '{"type":"end"}');
+});
+
+test('a rejected gain change during capture startup is applied once and leaves dictation running', async t => {
+  const fixture = browser(t, { capturePending: true, rejectGain: true });
+  const engine = new PhononStreamEngine(2000, () => {}, () => {});
+  t.after(() => engine.dispose());
+  engine.start(); await settle();
+  const gainUpdate = engine.setInputSettings({ noiseFloor: 0.015, leadInMs: 100, tailMs: 600, autoGainControl: true });
+  const rejected = assert.rejects(gainUpdate, /unsupported gain/);
+  fixture.captureReady(); fixture.ready(); await settle();
+  await rejected;
+  assert.deepEqual(fixture.gainChanges(), [true]);
+  assert.equal(engine.isBetweenBeginEnd(), true);
+  assert.equal(fixture.sockets.length, 1);
 });

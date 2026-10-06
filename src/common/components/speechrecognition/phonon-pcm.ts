@@ -1,6 +1,6 @@
 /** Capture begins before model startup so the first spoken phrase is retained. */
-export async function startPhononPcm(onFrame: (pcm: ArrayBuffer) => void) {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+export async function startPhononPcm(onFrame: (pcm: ArrayBuffer) => void, autoGainControl = false) {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl } });
   let context: AudioContext | undefined;
   try {
     context = new AudioContext({ sampleRate: 16000 });
@@ -19,7 +19,14 @@ export async function startPhononPcm(onFrame: (pcm: ArrayBuffer) => void) {
     await context.resume();
     const activeContext = context;
     let stopped: Promise<void> | undefined;
+    let gainUpdate = Promise.resolve();
     return {
+      setAutoGainControl(enabled: boolean) {
+        gainUpdate = gainUpdate.catch(() => {}).then(async () => {
+          if (!stopped) await Promise.all(stream.getTracks().map(track => track.applyConstraints({ autoGainControl: enabled })));
+        });
+        return gainUpdate;
+      },
       stop() {
         return stopped ??= (async () => {
           source.disconnect();
