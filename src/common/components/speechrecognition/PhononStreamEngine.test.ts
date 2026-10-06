@@ -147,3 +147,22 @@ test('disable preserves finalized text and prevents a pending startup from openi
   engine.start(); await settle();
   assert.equal(fixture.worklets.length, 1);
 });
+
+test('model warm-up does not spend the silence timeout before the first speech event', async t => {
+  const fixture = browser(t);
+  const results: SpeechResult[] = [];
+  const engine = new PhononStreamEngine(2000, result => results.push(result), () => {});
+  t.after(() => engine.dispose());
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  engine.start(); await settle(); fixture.ready(); await settle();
+  const socket = fixture.sockets[0]; socket.open();
+  t.mock.timers.tick(5000); await settle();
+  assert.equal(fixture.stopped(), 0);
+  assert.equal(socket.sent.some(value => value === '{"type":"end"}'), false);
+  fixture.worklets[0].audio();
+  socket.event({ type: 'partial', text: 'after warm-up' });
+  t.mock.timers.tick(2000); await settle();
+  assert.equal(socket.sent.at(-1), '{"type":"end"}');
+  socket.event({ type: 'done', text: 'After warm-up.' });
+  assert.equal(results.at(-1)?.transcript, 'After warm-up.');
+});

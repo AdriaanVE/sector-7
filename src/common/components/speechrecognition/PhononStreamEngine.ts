@@ -74,7 +74,7 @@ export class PhononStreamEngine implements IRecognitionEngine {
       this.streamReady = true;
       this.results = { ...this.results, interimTranscript: this.stopping ? 'Finishing Phonon...' : 'Listening...' };
       this.onResult(this.results);
-      if (this.stopping && this.captureStopped) this.endStream(); else this.resetInactivity();
+      if (this.stopping && this.captureStopped) this.endStream();
     };
     socket.onmessage = event => {
       if (!this.active || this.session !== session) return;
