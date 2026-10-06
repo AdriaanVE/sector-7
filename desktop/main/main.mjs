@@ -125,7 +125,7 @@ if (!app.requestSingleInstanceLock()) app.exit(0);
 else void app.whenReady().then(async () => {
   try {
     config = await loadConfig(app.getPath('userData'));
-    phonon = createPhonon(config.phonon, app.getPath('logs'));
+    phonon = createPhonon(config.phonon, app.getPath('logs'), app.isPackaged ? { pythonPath: join(process.resourcesPath, 'python') } : {});
     app.setAboutPanelOptions({ applicationName: 'Sector 7', applicationVersion: app.getVersion(), copyright: 'Based on big-AGI. MIT license.' });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       { label: 'Sector 7', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { availablePort, logger, shellPath } from './server.mjs';
 
@@ -10,7 +11,7 @@ export const PHONON_INSTALL = 'pip install fermion-research mlx mlx-audio mlx-lm
  * Own one lazy loopback server. Status never starts a process.
  * @param {{command: string, port: number}} config
  * @param {string} logs
- * @param {{healthTimeoutMs?: number, pollMs?: number}} [options]
+ * @param {{healthTimeoutMs?: number, pollMs?: number, pythonPath?: string}} [options]
  */
 export function createPhonon(config, logs, options = {}) {
   /** @type {{child?: import('node:child_process').ChildProcess, cancelled: boolean, missing?: boolean, failure?: Error, url: string} | undefined} */ let run;
@@ -58,14 +59,23 @@ export function createPhonon(config, logs, options = {}) {
       try {
         await availablePort(config.port);
         if (current.cancelled) throw new Error('Phonon startup stopped.');
-        /** @type {NodeJS.ProcessEnv} */ const env = { PATH: shellPath() };
+        /** @type {NodeJS.ProcessEnv} */ const env = { PATH: shellPath(), PYTHONPATH: options.pythonPath ?? fileURLToPath(new URL('../python', import.meta.url)), PYTHONDONTWRITEBYTECODE: '1' };
         for (const name of ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG']) if (process.env[name]) env[name] = process.env[name];
         const child = spawn(config.command, ['serve', 'phonon-2', '--host', '127.0.0.1', '--port', String(config.port), '--api-key', key],
           { env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
         current.child = child;
         const log = logger(join(logs, 'phonon.log'), [key]);
-        child.stdout.on('data', bytes => log(String(bytes)));
-        child.stderr.on('data', bytes => log(String(bytes)));
+        let cacheHookLoaded = false;
+        let outputTail = '';
+        const output = (/** @type {Buffer} */ bytes) => {
+          const text = String(bytes);
+          log(text);
+          const combined = outputTail + text;
+          cacheHookLoaded ||= combined.includes('sector7: MLX cache limit 256 MiB') || combined.includes('sector7: cache hook loaded (no MLX)');
+          outputTail = combined.slice(-64);
+        };
+        child.stdout.on('data', output);
+        child.stderr.on('data', output);
         child.once('error', error => {
           const missing = /** @type {NodeJS.ErrnoException} */ (error).code === 'ENOENT';
           current.missing = missing;
@@ -81,7 +91,10 @@ export function createPhonon(config, logs, options = {}) {
           if (current.failure) throw current.failure;
           try {
             const health = await fetch(`http://127.0.0.1:${config.port}/health`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(1000) });
-            if (health.ok && !current.cancelled && !current.failure) { state = 'running'; return { url: current.url }; }
+            if (health.ok && !current.cancelled && !current.failure) {
+              if (!cacheHookLoaded) log('sector7: MLX cache limit hook not loaded; command may isolate Python (-I/-E/-S) or drop PYTHONPATH.\n');
+              state = 'running'; return { url: current.url };
+            }
           } catch { /* Model download and warm-up can take minutes on the first run. */ }
           await delay(options.pollMs ?? 250);
         }
